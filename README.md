@@ -69,7 +69,7 @@ to 0 turns it off.
 | `DlssRayReconstruction` | Adds a "DLSS - Ray Reconstruction" row under DLSS Frame Generation. The game has it but never offers it. Ray Reconstruction is NVIDIA's AI denoiser: it reduces the noise of hardware ray-traced lighting and reflections (Lumen), for about 0.4 ms of GPU time on an RTX 5090. It stays Off until you pick On (NVIDIA RTX cards only, with hardware ray tracing on). It needs NVIDIA's Ray Reconstruction file, `nvngx_dlssd.dll`, in the game's `Engine\Plugins\Marketplace\nvidia\DLSS\DLSS\Binaries\ThirdParty\Win64\` folder. The game doesn't include it, and neither does this fork (it's NVIDIA's file, not ours to share): get it from NVIDIA's DLSS SDK, or with a tool like DLSS Swapper. |
 | `HudAspectRow` | A "HUD Aspect Ratio" row (Wide, 4:3, 16:9, 21:9, 32:9) that keeps the HUD inside a centered area on wide screens. Menus and full-screen effects stay full width. |
 | `MonitorNativeFromWindows` | Game bug: some monitors wider than 4095 pixels report a smaller resolution first (my AW3926QW says 3440x1440), and the game took that as native. The native resolution now comes from Windows. |
-| `FullscreenAllResolutions` | The fullscreen resolution list shows every mode your monitor supports, not only the ones with its own shape. |
+| `FullscreenAllResolutions` | The fullscreen resolution list shows every resolution your monitor supports, including other aspect ratios (16:9 on an ultrawide, for example), not only the ones matching your monitor's own aspect ratio. |
 
 ### Gameplay
 
