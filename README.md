@@ -38,7 +38,7 @@ to 0 turns it off.
 | Option | What it does |
 |---|---|
 | `StreamBehindLoadingScreen` | The new area's textures load while the loading screen is still up, so the picture comes back sooner. At 5120x2160, stepping out of the Cheydinhal inn: the last loading image was held 539 ms, now 230 ms (225 to 75 ms stepping in). City gates 420-437 to 166-213 ms, fast travel 327-421 to 113-160 ms. |
-| `UnfreezeBehindLoadingScreen`, `UnfreezeBehindLoadingScreenFastTravel` (off) | Lets the world run for a moment behind the loading screen after an exit, a fast travel or a save load, the way the game already does when you go indoors, so your character is standing and the area has settled when the picture comes in. The loading screen is that much longer, and nearby creatures get that much time to move while you can't see them. I use 500 for doors and 1000 for fast travel and save loads. |
+| `UnfreezeBehindLoadingScreen`, `UnfreezeBehindLoadingScreenFastTravel` (off) | Lets the world run for a moment behind the loading screen after an exit, a fast travel or a save load, the way the game already does when you go indoors, so your character is standing and the area has settled when the picture comes in. The loading screen extends depending on the scenario, it adds an additional .5 second load time for going through doors and an additional 1 second for fast travel and save loads. |
 | `FadeVtFlushSkip` (off) | The game empties its streamed-texture cache 1.5 s into every fade-in, so walls that were already sharp go blurry and sharpen again. This skips that. It changes what you see, so it's off. |
 | `VtStreamingUploads` (off) | Lets walls, roofs and stairs reach full detail sooner after a door by allowing more texture uploads per frame (I use 64). |
 
