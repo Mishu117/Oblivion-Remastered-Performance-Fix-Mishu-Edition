@@ -33,6 +33,16 @@ std::wstring Directory(const std::wstring& path)
     return slash == std::wstring::npos ? L"." : path.substr(0, slash);
 }
 
+}  // namespace
+
+// Lab probes: build.ps1 -Lab adds src\lab, whose OpfLabInstall replaces this empty one (the linker takes the alternate
+// name only when no object defines OpfLabInstall).
+extern "C" void OpfLabInstall(bool beforeGameCode, const wchar_t* iniPath);
+extern "C" void OpfLabInstallNone(bool, const wchar_t*) {}
+#pragma comment(linker, "/alternatename:OpfLabInstall=OpfLabInstallNone")
+
+namespace {
+
 std::wstring g_iniPath;
 std::atomic<bool> g_frozenClothHooked{false};  // FrozenClothStretchFix installed at startup
 std::atomic<bool> g_fadeInHooked{false};       // NpcFadeInNoRebuild installed at startup
@@ -138,6 +148,8 @@ DWORD WINAPI MonitorThread(LPVOID)
         if (g_collisionHooked) SetCollisionPrepareEnabled(cfg.prepareCollisionBehindLoadingScreen);
         SetEditorIdLookupGuardEnabled(cfg.editorIdLookupGuard);
         SetTrapTargetGuardEnabled(cfg.trapCrashGuard);
+        SetBowSneakAttackFixEnabled(cfg.bowSneakAttackFix);  // BowSneakAttackFix: no-op unless installed at start-up
+        SetAutosaveFollowsMenuEnabled(cfg.autosaveFollowsMenu);  // AutosaveFollowsMenu: no-op unless installed at start-up
         SetHavokPickWarningGuardEnabled(cfg.havokPickWarningGuard);
         SetFrameGenCrashGuardEnabled(cfg.frameGenCrashGuard);
         SetObjectReplaceGuardMode(cfg.objectReplaceGuard);
@@ -153,6 +165,9 @@ DWORD WINAPI MonitorThread(LPVOID)
         }
         if (g_displayHooked) SetDisplayModeCacheEnabled(cfg.displayModeCache);
         if (g_resizeHooked) SetImageResizeFixEnabled(cfg.screenshotFilterFast);
+        SetHdrMenuBackground(cfg.hdrMenuBackground);            // fork-local HdrMenuBackground: no-op unless installed
+        SetHdrSaveThumbnail(cfg.hdrSaveThumbnail);              // fork-local HdrSaveThumbnail: no-op unless installed
+        SetVramCounterFix(cfg.vramCounterFix);                  // fork-local VramCounterFix: no-op unless installed
         SetReadbackConvertMode(cfg.screenshotReadbackConvert);  // ScreenshotReadbackConvert: no-op unless installed at start-up
         SetScreenshotParallel(cfg.screenshotParallel);          // ScreenshotParallel: no-op unless installed at start-up
         if (g_focusHooked) SetFocusRestoreEnabled(cfg.restoreFsrAfterAltTab);
@@ -169,13 +184,19 @@ DWORD WINAPI MonitorThread(LPVOID)
             SetChaosTimeSlicing(cfg.physicsTreeTimeSlicing, cfg.physicsSliceIterations, cfg.physicsSliceCopyKB, cfg.physicsSliceAdaptive);
         if (g_flushHooked) SetPhysicsFlushParallel(cfg.physicsFlushParallel, cfg.physicsFlushMinChanges);
         if (g_clearHooked) SetInstanceClearReserve(cfg.instanceClearReserve);
-        if (g_pacingHooked)
+        if (g_pacingHooked) {
             SetNpcPacing(cfg.npcCreationPacing, cfg.pacingBudgetMs, cfg.pacingMinDistance, cfg.pacingMaxLagFrames, cfg.pacingUseSlack,
                          cfg.pacingFlowWait, cfg.pacingFlowWaitFrames);
+        }
         if (g_pacingHooked) SetNpcPacingFadeAware(cfg.pacingFadeAware);
         if (g_pacingHooked) SetNpcPacingLeanFlowDrain(cfg.pacingLeanFlowDrain);  // PacingLeanFlowDrain: live
         SetHitchLedger(cfg.hitchLedger, cfg.hitchLedgerMs);  // diagnostic: no-op unless installed at start-up
         SetTickSplit(cfg.hitchLedger && cfg.hitchLedgerTickSplit);  // diagnostic: no-op unless installed at start-up
+        SetDoorDiagEarlyStream(cfg.doorDiagEarlyStream);     // fork-local diagnostic DoorDiag's experiment (no-op unless installed)
+        SetFadeVtFlushSkip(cfg.fadeVtFlushSkip);             // fork-local FadeVtFlushSkip (no-op unless installed)
+        SetStreamBehindLoading(cfg.streamBehindLoading);     // StreamBehindLoadingScreen: no-op unless installed at start-up
+        SetUnfreezeBehindLoading(cfg.unfreezeBehindLoading); // fork-local prototype UnfreezeBehindLoadingScreen (trade-off; 0 = off)
+        SetUnfreezeBehindLoadingFastTravel(cfg.unfreezeBehindLoadingFastTravel);  // ... its own hold after a fast travel (0 = the same)
         HitchLedgerDrain();                                  // ... its slow-frame records into OblivionPerfFix-ledger.csv
         if (g_clothRegHooked) SetClothRegisterLite(cfg.clothRegisterLite);  // ClothRegisterLite: live once installed
         if (g_bodiesHooked) SetParallelStaticBodies(ParallelHelpersAllowed(cfg) && cfg.parallelStaticBodies, cfg.parallelStaticBodiesMin);
@@ -183,6 +204,8 @@ DWORD WINAPI MonitorThread(LPVOID)
         if (g_sceneAddHooked) SetPipelinedSceneAdd(ParallelHelpersAllowed(cfg) && cfg.pipelinedSceneAdd, cfg.pipelinedSceneAddMin);
         SetPipelinedBodyCreation(ParallelHelpersAllowed(cfg) && cfg.pipelinedBodyCreation);  // PipelinedBodyCreation: no-op unless found with ParallelStaticBodies installed
         SetGpuSceneParallelUpload(cfg.gpuSceneParallelUpload);  // GpuSceneParallelUpload: a console variable, set once registered
+        SetVtStreamingUploads(cfg.vtStreamingUploads);          // fork-local VtStreamingUploads: a console variable (0 = the game's)
+        SetSeparableSkinAbove4K(cfg.separableSkinAbove4K);    // fork-local SeparableSkinAbove4K: r.SSS.Burley.Quality when wider than 4K (trade-off)
         SetDirtyTreeQuickInsert(cfg.dirtyTreeQuickInsert);  // no-op unless installed at start-up
         SetBulkIndexInsert(cfg.bulkIndexInsert, cfg.bulkIndexInsertMin, cfg.physicsInternalFlushParallel);  // BulkIndexInsert: no-op unless installed
         SetPhysicsQueueShrinkOnce(cfg.physicsQueueShrinkOnce);  // PhysicsQueueShrinkOnce: no-op unless installed with BulkIndexInsert
@@ -199,6 +222,10 @@ DWORD WINAPI MonitorThread(LPVOID)
         PsoPrecompileWatchDriver();  // the cold-cache guard's driver-thread reading (no-op unless installed and precompiling)
         SetAnimTeardownParallel(ParallelHelpersAllowed(cfg) ? cfg.animTeardownParallel : 0);    // AnimTeardownParallel: no-op unless installed at start-up
         SetCellBufferPacedEvict(cfg.cellBufferPacedEvict);    // CellBufferPacedEvict: no-op unless installed at start-up
+        TickOldEngineSettings(g_iniPath.c_str());             // fork-local OldEngineSettings: no-op unless installed at start-up
+        HdrMenuMonitorTick();                                 // fork-local HdrMenuRows: reads Save_Settings.sav once (no-op unless installed)
+        SetHdrGamma22(cfg.hdrGamma22, cfg.hdrGamma22White);   // fork-local HdrGamma22 (trade-off): live (no-op unless installed)
+        HdrGammaMonitorTick();                                // ... fits a curve the game thread asked for
         SetPhysicsPushParallel(ParallelHelpersAllowed(cfg) ? cfg.physicsPushParallel : 0, cfg.physicsPushMin);  // PhysicsPushParallel: no-op unless installed
         if (g_navmeshFound) SetNavmeshBuildNoBusyWait(cfg.navmeshBuildNoBusyWait);
         if (g_busyWaitFound) SetBusyWaitFlagCheck(cfg.busyWaitFlagCheck);
@@ -235,6 +262,8 @@ DWORD WINAPI MonitorThread(LPVOID)
             if (g_navLinkHooked) LogNavLinkFastStats();
             LogEditorIdLookupGuardStats();
             LogTrapTargetGuardStats();
+            LogBowSneakAttackFixStats();
+            LogAutosaveFollowsMenuStats();
             LogHavokPickWarningGuardStats();
             LogFrameGenCrashGuardStats();
             LogObjectReplaceGuardStats();
@@ -243,13 +272,20 @@ DWORD WINAPI MonitorThread(LPVOID)
             LogFrameGenCameraInfoStats();
             LogFrameGenPacingStats();
             LogDisplayModeCacheStats();
+            LogDisplayNativeStats();  // fork-local MonitorNativeFromWindows (no-op unless installed)
+            LogHdrGammaStats();       // fork-local HdrGamma22 (no-op unless it wrote)
             LogImageResizeStats();
+            LogHdrMenuBackgroundStats();  // fork-local HdrMenuBackground (no-op unless it converted)
+            LogHdrSaveThumbnailStats();   // fork-local HdrSaveThumbnail (no-op unless a save's picture passed)
+            LogVramCounterFixStats();  // fork-local VramCounterFix (no-op unless the counter was read)
             LogReadbackConvertStats();
             LogScreenshotParallelStats();
             LogOsPageCacheStats();
             LogPsoPrecompileStats();
             LogAnimTeardownParallelStats();
             LogCellBufferPacedEvictStats();
+            LogVtStreamingUploadsStats();
+            LogSeparableSkinAbove4KStats();
             LogFocusRestoreStats();
             LogMenuOpenFlashStats();
             if (g_physAnimHooked) LogPhysAnimNoEmptyLockStats();
@@ -270,6 +306,9 @@ DWORD WINAPI MonitorThread(LPVOID)
             LogInstanceClearStats();
             LogMemoryStats();
             LogViewRenameGuardStats();
+            LogDoorDiagStats();
+            LogFadeVtFlushStats();
+            LogStreamBehindLoadingStats();
         }
     }
 }
@@ -388,6 +427,18 @@ void Init(const char* loadedVia, bool proxyOk, bool beforeGameCode)
     // TrapCrashGuard (a crash guard, not a speed-up): installed only if enabled at startup; afterwards the ini switches it live.
     if (cfg.trapCrashGuard) ApplyTrapTargetGuard();
     else Log("[trap] disabled in OblivionPerfFix.ini (takes a restart to switch on)");
+    // BowSneakAttackFix (a game bug fix that changes damage back to the intended value): two calls in the OblivionThread's
+    // code, written only before game code runs and only if on at start-up; afterwards the ini switches it live.
+    if (cfg.bowSneakAttackFix) {
+        if (!beforeGameCode) Log("[bowsneak] can only be installed at start-up (version.dll), not installed");
+        else if (ApplyBowSneakAttackFix()) SetBowSneakAttackFixEnabled(true);
+    } else Log("[bowsneak] BowSneakAttackFix off in OblivionPerfFix.ini (takes a restart to switch on)");
+    // AutosaveFollowsMenu (a game bug fix: no autosave the menu's options say not to make): two calls in the
+    // OblivionThread's code, written only before game code runs and only if on at start-up; afterwards the ini switches it live.
+    if (cfg.autosaveFollowsMenu) {
+        if (!beforeGameCode) Log("[autosave] can only be installed at start-up (version.dll), not installed");
+        else if (ApplyAutosaveFollowsMenu()) SetAutosaveFollowsMenuEnabled(true);
+    } else Log("[autosave] AutosaveFollowsMenu off in OblivionPerfFix.ini (takes a restart to switch on)");
     // HavokPickWarningGuard (a freeze guard, not a speed-up): installed only if enabled at startup; afterwards the ini switches it live.
     if (cfg.havokPickWarningGuard) ApplyHavokPickWarningGuard();
     else Log("[picks] disabled in OblivionPerfFix.ini (takes a restart to switch on)");
@@ -436,6 +487,15 @@ void Init(const char* loadedVia, bool proxyOk, bool beforeGameCode)
     // MenuScreenshotFilter: installed only if enabled at startup; afterwards the ini switches it live.
     if (cfg.screenshotFilterFast) g_resizeHooked = ApplyImageResizeFix(beforeGameCode);
     else Log("[resize] disabled in OblivionPerfFix.ini (takes a restart to switch on)");
+    // fork-local HdrMenuBackground (trade-off): the menu screenshot handler's ImageResize call redirected always (the wrapper
+    // passes through while off or not HDR10); the ini switches it live.
+    if (ApplyHdrMenuBackground(beforeGameCode)) SetHdrMenuBackground(cfg.hdrMenuBackground);
+    // fork-local HdrSaveThumbnail (trade-off): the save's screenshot callback's copy redirected always (the wrapper only
+    // copies while off or not HDR10); the ini switches it live.
+    if (ApplyHdrSaveThumbnail(beforeGameCode)) SetHdrSaveThumbnail(cfg.hdrSaveThumbnail);
+    // fork-local VramCounterFix (game bug): the "Show VRAM" counter's two query calls redirected always (the wrapper passes
+    // the game's numbers through unless both are 0, and does nothing while the key is 0), so it can be switched live.
+    if (ApplyVramCounterFix(beforeGameCode)) SetVramCounterFix(cfg.vramCounterFix);
     // ScreenshotReadbackConvert: installed only if enabled at startup; afterwards the ini switches it live (0 / 1 / 2 = verify).
     if (cfg.screenshotReadbackConvert) {
         if (ApplyReadbackConvertFix(beforeGameCode)) SetReadbackConvertMode(cfg.screenshotReadbackConvert);
@@ -542,6 +602,9 @@ void Init(const char* loadedVia, bool proxyOk, bool beforeGameCode)
     } else if (cfg.physicsPushParallel)
         Log("[push] PhysicsPushParallel kept off: %u usable logical processors (needs %d, ParallelMinProcessors)", UsableLogicalProcessors(), cfg.parallelMinProcessors);
     else Log("[push] off in OblivionPerfFix.ini (takes a restart to switch on)");
+    // fork-local ShaderScreenAfterDriverChange (game bug): installed only if on at start-up (the decision is made once, early).
+    if (cfg.shaderScreenAfterDriverChange) ApplyShaderScreenAfterDriverChange(beforeGameCode, dir.c_str());
+    else Log("[shaderscreen] ShaderScreenAfterDriverChange off in OblivionPerfFix.ini (takes a restart to switch on)");
     // Diagnostic HitchLedger: installed only if on at startup (the tick-group entry detour, before BulkIndexInsert, whose lab
     // probe times the same entry; the frame-end sync call; read-only counters); afterwards the ini switches recording live.
     if (cfg.hitchLedger) {
@@ -551,6 +614,44 @@ void Init(const char* loadedVia, bool proxyOk, bool beforeGameCode)
         const bool tickHooks = cfg.hitchLedgerTickSplit;
         if (tickHooks && InstallTickSplit(beforeGameCode, dir.c_str())) SetTickSplit(cfg.hitchLedgerTickSplit);
     }
+    // Fork-local diagnostic DoorDiag: installed only if on at startup (two entry detours, one vtable slot); its timeline needs
+    // NpcCreationPacing's frame hook.
+    if (cfg.doorDiag) {
+        if (!g_pacingHooked) Log("[doordiag] NpcCreationPacing's frame hook is not installed: no loading-screen timeline");
+        if (InstallDoorDiag(beforeGameCode)) SetDoorDiagEarlyStream(cfg.doorDiagEarlyStream);
+    }
+    // Fork-local diagnostic PixGpuCapturer: PIX's capture library, only if on at startup (before the renderer exists).
+    if (cfg.pixGpuCapturer) InstallPixGpuCapturer(beforeGameCode);
+    // Fork-local FadeVtFlushSkip (off by default): installed only if on at startup (two .rdata slots of the fade-in's flush timer
+    // delegate); afterwards the ini switches it live.
+    if (cfg.fadeVtFlushSkip) {
+        if (InstallFadeVtFlushSkip()) SetFadeVtFlushSkip(true);
+    }
+    // StreamBehindLoadingScreen: the gate-arming detour, only if on at startup (it also needs the fade-to-game hook's search and
+    // NpcCreationPacing's frame hook); afterwards the ini switches it live.
+    if (cfg.streamBehindLoading) {
+        if (!g_pacingHooked) Log("[streamload] NpcCreationPacing's frame hook is not installed: not installed");
+        else if (InstallStreamBehindLoading(beforeGameCode)) SetStreamBehindLoading(true);
+    } else Log("[streamload] StreamBehindLoadingScreen off in OblivionPerfFix.ini (takes a restart to switch on)");
+    // fork-local MonitorNativeFromWindows / FullscreenAllResolutions: one call redirected / one jump changed, only if on at
+    // startup (before the game first reads its display metrics on the version.dll route).
+    if (cfg.monitorNativeFromWindows) InstallMonitorNativeFromWindows();
+    else Log("[display] MonitorNativeFromWindows off in OblivionPerfFix.ini (takes a restart to switch on)");
+    if (cfg.fullscreenAllResolutions) InstallFullscreenAllResolutions();
+    else Log("[display] FullscreenAllResolutions off in OblivionPerfFix.ini (takes a restart to switch on)");
+    // fork-local HdrMenuRows and DlssRayReconstruction: no code patched; the Graphics page's rows are made from
+    // NpcCreationPacing's frame hook once the settings tables exist. Only if on at startup.
+    if (cfg.hdrMenuRows || cfg.dlssRayReconstruction || cfg.hudAspectRow) {
+        if (!g_pacingHooked) Log("[hdrmenu] NpcCreationPacing's frame hook is not installed: HdrMenuRows / DlssRayReconstruction / HudAspectRow not installed");
+        else InstallHdrMenu(cfg.hdrMenuRows, cfg.dlssRayReconstruction, cfg.hudAspectRow, beforeGameCode);
+    }
+    if (!cfg.hdrMenuRows) Log("[hdrmenu] HdrMenuRows off in OblivionPerfFix.ini (takes a restart to switch on)");
+    if (!cfg.dlssRayReconstruction) Log("[rrrow] DlssRayReconstruction off in OblivionPerfFix.ini (takes a restart to switch on)");
+    if (!cfg.hudAspectRow) Log("[hudaspect] HudAspectRow off in OblivionPerfFix.ini (takes a restart to switch on)");
+    // fork-local HdrGamma22 (trade-off): no code patched; the HDR tone curve's block is found here and refitted from
+    // NpcCreationPacing's frame hook while the ini switch is on (live, also when off at startup).
+    if (!g_pacingHooked) Log("[hdrgamma] NpcCreationPacing's frame hook is not installed: HdrGamma22 not installed");
+    else if (InstallHdrGamma()) SetHdrGamma22(cfg.hdrGamma22, cfg.hdrGamma22White);
     // AnimTeardownParallel: three calls redirected, only if not 0 at startup; afterwards the ini switches it live.
     if (cfg.animTeardownParallel && ParallelHelpersAllowed(cfg)) {
         if (InstallAnimTeardownParallel(beforeGameCode)) SetAnimTeardownParallel(ParallelHelpersAllowed(cfg) ? cfg.animTeardownParallel : 0);
@@ -636,6 +737,10 @@ void Init(const char* loadedVia, bool proxyOk, bool beforeGameCode)
     if (cfg.cellBufferPacedEvict) {
         if (InstallCellBufferPacedEvict(beforeGameCode)) SetCellBufferPacedEvict(cfg.cellBufferPacedEvict);
     }
+    // fork-local OldEngineSettings: the ini writer detoured (after CellBufferPacedEvict's detour of the same entry, which
+    // it chains to) only if [OldEngine] lists settings at start-up; values applied by the monitor once the world exists.
+    if (OldEngineSettingsListed(g_iniPath.c_str())) InstallOldEngineSettings();
+    else Log("[oldini] no [OldEngine] settings listed in OblivionPerfFix.ini (takes a restart to add the first)");
     // PhysicsDestroyBatch: three call sites in the step's DestroyPendingProxies path, only if != 0 at start-up (then
     // live); before the lab's PhysWaitProbe, whose entry detours would fail this code's entry check.
     if (cfg.physicsDestroyBatch) {
@@ -663,6 +768,8 @@ void Init(const char* loadedVia, bool proxyOk, bool beforeGameCode)
     // ChaosMaxPayloadSize: p.MaxPayloadSize before the engine reads its settings and before any physics scene (start-up,
     // both routes; only over the game's 100000; an Engine.ini value applied later wins).
     SetChaosMaxPayloadSize(cfg.chaosMaxPayloadSize, beforeGameCode);
+    // Lab probes (src\lab, build.ps1 -Lab only); the public build links the empty OpfLabInstallNone below.
+    OpfLabInstall(beforeGameCode, g_iniPath.c_str());
 
     {
         // Start-up cost: the whole Init and its pattern searches (OBSE route: the game's main thread waits for it).
@@ -717,7 +824,7 @@ struct OBSEPluginVersionData {
 extern "C" {
 __declspec(dllexport) OBSEPluginVersionData OBSEPlugin_Version = {
     OBSEPluginVersionData::kVersion,
-    0x010203,  // plugin version 1.2.3
+    0x0102031B,  // plugin version 1.2.3-beta+fork.27 (fork-local: major.minor.patch.fork)
     "OblivionPerfFix",
     "OblivionPerfFix",
     // Addresses come from byte-pattern scans and we use no OBSE game structures,

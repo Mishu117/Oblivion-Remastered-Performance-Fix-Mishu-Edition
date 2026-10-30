@@ -16,6 +16,9 @@
 .PARAMETER OutDir
   Build folder (default: build next to this script). Use a scratch folder to build without touching build\.
 
+.PARAMETER Lab
+  Also compiles src\lab (gitignored: local probes that are never released), into build\lab unless -OutDir is given.
+
 .PARAMETER WaitForGame
   If Oblivion Remastered is running, wait until it is closed, then build (default: refuse with a message). A compile
   next to a running game makes it stutter, even at below-normal priority.
@@ -31,6 +34,7 @@
 param(
     [switch]$Debug,
     [switch]$SelfTest,
+    [switch]$Lab,
     [string]$Exe,
     [string]$OutDir,
     [switch]$WaitForGame,
@@ -90,7 +94,7 @@ function Find-VcVars {
 # the same source gives the same DLL). Object files are named after the source file, so names must be unique.
 function Get-Sources([string[]]$skip) {
     $srcRoot = Join-Path $PSScriptRoot 'src'
-    $dirs = @(Get-ChildItem -LiteralPath $srcRoot -Directory | Where-Object { $_.Name -ne 'lab' } | Sort-Object Name)
+    $dirs = @(Get-ChildItem -LiteralPath $srcRoot -Directory | Where-Object { $Lab -or $_.Name -ne 'lab' } | Sort-Object Name)
     $files = foreach ($d in $dirs) {
         Get-ChildItem -LiteralPath $d.FullName -Filter '*.cpp' -File | Sort-Object Name |
             ForEach-Object { 'src\' + $d.Name + '\' + $_.Name } | Where-Object { $skip -notcontains $_ }
@@ -102,7 +106,7 @@ function Get-Sources([string[]]$skip) {
 
 $vcvars = Find-VcVars
 Write-Host "vcvars: $vcvars"
-$out = if ($OutDir) { [IO.Path]::GetFullPath($OutDir) } else { Join-Path $PSScriptRoot 'build' }
+$out = if ($OutDir) { [IO.Path]::GetFullPath($OutDir) } elseif ($Lab) { Join-Path $PSScriptRoot 'build\lab' } else { Join-Path $PSScriptRoot 'build' }
 $obj = Join-Path $out 'obj'
 New-Item -ItemType Directory -Force $obj | Out-Null
 
@@ -141,9 +145,9 @@ function New-VersionResource([string]$rcPath, [string]$fileName, [string]$descri
         '      VALUE "InternalName", "OblivionPerfFix"',
         '      VALUE "LegalCopyright", "Copyright (c) 2026 LTSharpe and contributors. MIT License."',
         "      VALUE `"OriginalFilename`", `"$fileName`"",
-        '      VALUE "ProductName", "Oblivion Remastered Performance Fix"',
+        '      VALUE "ProductName", "Oblivion Remastered Performance Fix (Mishu117 fork)"',
         "      VALUE `"ProductVersion`", `"$ver$sfx`"",
-        '      VALUE "Comments", "https://github.com/LTSharpe/OblivionRemasteredPerformanceFix"',
+        '      VALUE "Comments", "https://github.com/Mishu117/OblivionRemasteredPerformanceFix (a fork of https://github.com/LTSharpe/OblivionRemasteredPerformanceFix)"',
         '    END',
         '  END',
         '  BLOCK "VarFileInfo"',

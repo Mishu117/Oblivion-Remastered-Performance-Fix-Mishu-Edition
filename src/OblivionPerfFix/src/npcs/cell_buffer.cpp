@@ -32,6 +32,10 @@
 //     the in-memory values). That function is detoured for this one setting only and given a copy holding `base`, so
 //     the player's Oblivion.ini keeps the value it had (otherwise every start would add H again).
 //
+// (Fork-local, tried 2026-10-27 and removed: uGridsToLoad 7 set in this clamp stub before the TES constructor's first
+// read crashed every launch (15 of 15) with a corrupted scene-graph child at exe+0x66E3F9A: something in the remaster
+// stays sized for the 5 x 5 grid.)
+//
 // Equivalence (fixes-explained ## 50): the game is at every moment in a state the stock game reaches with
 // uExterior Cell Buffer = base + H; slots 0..base-1 hold the same cells in the same order as the stock game with `base`
 // (an insert rotates the same prefix; only what falls off the prefix goes to the tail instead of being torn down), and
@@ -470,6 +474,11 @@ void SetCellBufferPacedEvict(int mode)
         Log("[cellbuf] %s", m ? "outgoing cells torn down one per OblivionThread frame after a crossing"
                               : "outgoing cells torn down in the crossing frame (as the game does)");
 }
+
+// fork-local (2026-10-26) for OldEngineSettings (settings/old_engine_settings.cpp): the ini writer's entry (detoured
+// once this is installed) and the TES pointer's slot, from this file's search (no patching); nullptr if not found.
+uint8_t* CellBufferIniWriter() { return FindCellBufferPacedEvict() ? s.writeSetting : nullptr; }
+uint64_t* CellBufferTesSlot() { return FindCellBufferPacedEvict() ? s.tesSlot : nullptr; }
 
 void LogCellBufferPacedEvictStats()
 {

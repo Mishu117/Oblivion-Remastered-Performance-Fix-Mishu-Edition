@@ -1283,6 +1283,10 @@ void MaxTickRateHook(void* engine)
         const uint8_t* const tes = g.tes ? *g.tes : nullptr;
         lp.travel = tes && tes[kTesTravelPending];
         LedgerFrameEnd(lp);  // the frame since the last exit (no-op unless installed)
+        DoorDiagFrameEnd();  // fork-local diagnostic DoorDiag's loading-screen timeline (no-op unless installed)
+        StreamBehindLoadingFrameEnd();  // fork-local StreamBehindLoadingScreen (no-op unless installed and on)
+        HdrMenuFrameEnd();              // fork-local HdrMenuRows / HudAspectRow / DlssRayReconstruction (no-op unless installed)
+        HdrGammaFrameEnd();             // fork-local HdrGamma22 (no-op unless installed; writes only while on)
     }
     const uint64_t sleep = t1 - t0, period = g.lastPaceEnd ? t1 - g.lastPaceEnd : 0;
     g.lastPaceEnd = t1;
