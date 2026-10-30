@@ -107,7 +107,9 @@ Download `OblivionPerfFix-<version>.zip` from the [Releases](https://github.com/
 page and extract it into the game's folder (it has the game's folder layout), or copy the two files by hand as above.
 With OBSE64, or another mod that already uses `version.dll`, use `OblivionPerfFix-<version>-OBSE.zip` instead (see
 Compatibility).
-If you already use the original fix, this replaces it: use one or the other, not both.
+**Use it on its own.** If you already use the original fix, this replaces it: use one or the other, not both. Also
+don't combine it with other performance or optimization mods (Engine.ini tweak packs, other stutter or performance DLL
+fixes): they change the same engine settings and code, and can interfere with this mod.
 
 **Uninstall:** delete `version.dll` and `OblivionPerfFix.ini`. The fix never changes the game's files.
 
