@@ -43,7 +43,7 @@ The report
 - captures\bench\_report\<time>\report.md: average fps, 1% low, worst frame and hitches during the flight, stock vs
   fix. It holds no user name, PC name or folder paths.
 - To share it: open a "Benchmark result" issue at
-  https://github.com/LTSharpe/OblivionRemasteredPerformanceFix/issues/new/choose
+  https://github.com/Mishu117/OblivionRemasteredPerformanceFix/issues/new/choose
   paste report.md into it and attach the result-*.json files from the same folder.
 - Differences under about 5% are noise. More rounds give steadier numbers: run "Benchmark.cmd -Rounds 3" from a
   command prompt in this folder; "Benchmark.cmd -Rounds 1" is a quick look (one game start each, about 8 minutes).
@@ -57,6 +57,6 @@ If something goes wrong
 To remove it: delete this folder. If it installed the fix and you want your previous files back, copy them from
 backup\<time>\ into the game's OblivionRemastered\Binaries\Win64\ folder.
 
-Source, documentation and the full benchmark: https://github.com/LTSharpe/OblivionRemasteredPerformanceFix
+Source, documentation and the full benchmark: https://github.com/Mishu117/OblivionRemasteredPerformanceFix
 (docs/benchmark.md). MIT licence (LICENSE.txt). PresentMon and UE4SS have their own licences (MIT) and are
 downloaded from their own projects; this kit does not contain them.

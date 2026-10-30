@@ -1,7 +1,7 @@
 # Builds the fix DLL on every push and pull request. For a version tag (v1.0.0-beta) it also packages the release zips
 # (the fix in three layouts, and the benchmark kit),
 # attests where it was built (gh attestation verify) and creates a DRAFT release: a maintainer reviews and publishes it.
-# Then virustotal.yml scans the zips and adds the results to the draft. Publishing it starts nexus.yml (Nexus Mods).
+# Then virustotal.yml scans the zips and adds the results to the draft (needs VT_API_KEY). This fork has no Nexus upload.
 name: Build
 
 on:
