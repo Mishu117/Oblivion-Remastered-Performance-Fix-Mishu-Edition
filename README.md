@@ -1,34 +1,57 @@
-# Oblivion Remastered Performance Fix (Mishu117's fork)
+# Oblivion Remastered Performance Fix – Mishu's Edition
 
-This is a fork of [LTSharpe's Oblivion Remastered Performance Fix](https://github.com/LTSharpe/OblivionRemasteredPerformanceFix).
-It has everything from his 1.2.3-beta, plus what I needed on an ultrawide HDR monitor at a high refresh rate:
+An expanded fork of [LTSharpe's Oblivion Remastered Performance Fix](https://github.com/LTSharpe/OblivionRemasteredPerformanceFix),
+building on the original version 1.2.3-beta with additional performance optimizations, graphics improvements, bug
+fixes, and customization options.
 
-- **Quicker arrivals:** textures load while the loading screen is still up, so the world appears sooner after loading
-  a save, a fast travel or going through a door, fully textured.
-- **Sharp textures on arrival (optional):** the game's streamed textures (walls, roofs, stairs) reach full detail in
-  about 2 seconds instead of about 8, so everything is sharp almost as soon as you arrive instead of slowly sharpening
-  in front of you.
-- **Your monitor's full resolution list** in fullscreen, so you can pick the one you want.
-- **Autosaves without stutter:** the save's picture is made off the main thread.
-- **Proper HDR:** follows the game's SDR gamma curve, and adds an HDR section to the game's Graphics menu where you can
-  adjust Peak Brightness, Paper White, Black Floor and Mid-Tone to your liking.
-- **Shader recompile after a driver update:** after you update your graphics driver (or change graphics card), the
-  shaders compile on the start-up screen, so they don't compile while you play.
-- **NVIDIA Ray Reconstruction:** NVIDIA's AI denoiser cleans up the ray-traced lighting and reflections instead of the
-  game's own, for a cleaner, steadier picture (DLSS and hardware ray tracing only).
-- **HUD Aspect Ratio:** for ultrawide players who want the HUD closer to the center of their view.
-- **Other game fixes.**
+The original mod addresses dozens of performance issues without compromising the game's intended visuals or gameplay.
+This fork builds on that foundation, with a particular focus on loading transitions, texture streaming, HDR, and
+high-resolution displays.
 
-LTSharpe and the other contributors did the hard part: the benchmark, the method, and about forty fixes that keep the
-game looking and playing the same. I want to keep building on that work. If his fix made your game better, consider
-[supporting him on GitHub Sponsors](https://github.com/sponsors/LTSharpe).
+## What's new
+
+### Performance & Loading
+
+- **Faster loading transitions:** Begin streaming textures behind loading screens to reduce the time spent waiting for
+  the world to appear.
+- **Faster texture streaming (optional):** Reduce the time it takes walls, roofs, and other streamed textures to reach
+  full detail, from approximately 8 seconds to 2 seconds in testing.
+- **Smoother HDR autosaves:** Move save-thumbnail processing off the main thread to eliminate the large autosave hitch
+  observed during testing.
+- **Shader precompilation after driver updates:** Automatically restore the shader-loading screen when graphics drivers
+  change, reducing shader compilation stutter during gameplay.
+
+### Graphics & Display
+
+- **Improved HDR:** Correct the game's raised shadow and midtone levels, with new in-game controls for Peak Brightness,
+  Paper White, Black Floor, and Mid-Tone.
+- **NVIDIA DLSS Ray Reconstruction:** Enable NVIDIA's AI-powered denoiser for hardware ray-traced lighting and
+  reflections.
+- **Expanded resolution support:** Access all supported fullscreen resolutions, including alternative aspect ratios on
+  ultrawide displays.
+- **Ultrawide HUD customization:** Adjust HUD positioning independently of your display's aspect ratio.
+
+### Additional Fixes
+
+- Correct broken bow sneak attack damage.
+- Fix inaccurate VRAM reporting and HDR save thumbnails.
+- Address additional engine and gameplay issues.
+
+## Built on the original
+
+LTSharpe and the original contributors established the performance optimizations, benchmarking methodology, and
+foundational fixes that make this project possible. This fork preserves that work while extending it with additional
+improvements and features.
+
+If the original mod improved your experience, consider
+[supporting LTSharpe on GitHub Sponsors](https://github.com/sponsors/LTSharpe).
 
 Like the original, the code and docs here were written with Claude (Anthropic's AI) in Claude Code. I set the goals,
 tested every build in my own game and made the calls on what ships.
 
 Current version: **1.2.3-beta+fork.27**, for the Steam version of the game (build 19115871).
 
-## What the fork adds
+## Every option in detail
 
 Everything below is on by default unless it says otherwise. Each one has a line in `OblivionPerfFix.ini`, and setting it
 to 0 turns it off.
