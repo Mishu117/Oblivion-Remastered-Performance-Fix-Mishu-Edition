@@ -1,0 +1,96 @@
+{
+  "name": "ft-grass",
+  "description": "Fork-local (2026-10-24): grass appearing after a fast travel. Map fast travels from the Imperial City Market District to three destinations with grass (Weye, Skingrad - West Gate, Harcane Grove; Chorrol South Gate lands inside the city), each from a fresh teleport to the market (so wildlife at a destination cannot block the next travel). Each arrival captured whole (stayCapture: loading screen, fade-in, 12 s hold; 1280 px PNG every -SceneShots ms, full-resolution JPEG every 4th) for mytools/Wall-Settle.ps1 and mytools/Pop-Detect.ps1. Noon, clear. Run with -SceneShots 200 -Pass perf.",
+  "settings": {},
+  "record": [
+    "grass.MaxCreatePerFrame",
+    "grass.MaxAsyncTasks",
+    "grass.GrassCreationPrioritizedMultipler",
+    "grass.TickInterval",
+    "grass.CullDistanceScale",
+    "grass.densityScale",
+    "grass.GuardBandMultiplier",
+    "grass.UseStreamingManagerForCameras",
+    "r.Streaming.PoolSize"
+  ],
+  "masks": [
+    [
+      0.94,
+      0.0,
+      0.06,
+      0.035
+    ]
+  ],
+  "defaults": {
+    "hour": 12,
+    "weather": "Clear",
+    "settle": 6,
+    "measure": 10,
+    "hold": 12
+  },
+  "weathers": {
+    "Clear": "00038EEE"
+  },
+  "places": {
+    "ic-market-ft": {
+      "world": "ICMarketDistrict",
+      "pos": [
+        33298.3,
+        68771.1,
+        3550.0
+      ],
+      "heading": 41.3,
+      "pitch": 0
+    }
+  },
+  "scenes": [
+    {
+      "id": "ft-weye",
+      "type": "door",
+      "at": "ic-market-ft",
+      "stayCapture": true,
+      "stayFullEvery": 4,
+      "tags": [
+        "fasttravel"
+      ],
+      "legs": [
+        {
+          "name": "go",
+          "fasttravel": "Weye"
+        }
+      ]
+    },
+    {
+      "id": "ft-skingrad",
+      "type": "door",
+      "at": "ic-market-ft",
+      "stayCapture": true,
+      "stayFullEvery": 4,
+      "tags": [
+        "fasttravel"
+      ],
+      "legs": [
+        {
+          "name": "go",
+          "fasttravel": "Skingrad - West Gate"
+        }
+      ]
+    },
+    {
+      "id": "ft-harcane",
+      "type": "door",
+      "at": "ic-market-ft",
+      "stayCapture": true,
+      "stayFullEvery": 4,
+      "tags": [
+        "fasttravel"
+      ],
+      "legs": [
+        {
+          "name": "go",
+          "fasttravel": "Harcane Grove"
+        }
+      ]
+    }
+  ]
+}

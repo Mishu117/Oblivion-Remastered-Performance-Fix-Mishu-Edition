@@ -71,6 +71,8 @@ param(
     [ValidateSet('dbghelp', 'fast')][string]$StackSampler = 'dbghelp',   # fast: FastSampler.cs, ~30 us per thread sample (all workers at a few hundred Hz); dbghelp: the old ~1 ms sampler
     [double]$StackIntervalMs = 2,                        # -StackSampler fast: one sweep over all sampled threads every n ms
     [int]$LegShots = 0,                                  # door legs: also capture the window every n ms (shots\<scene>-<leg>\<ms after activation>.png): what the player sees during a transition; perturbs timing a little
+    [switch]$LegShotsCrop,                               # fork-local: with -LegShots / -SceneShots also save the centre 1280x720 of each capture at full resolution (<QPC ms>-crop.png)
+    [int]$SceneShots = 0,                                # fork-local: static scenes: capture the window every n ms during the measured time (shots\<scene>-scene\<QPC ms>.jpg), e.g. to look for sky flicker
     [switch]$Force,                                      # ignore the "game in use" check; may restart a game the benchmark did not start
     [switch]$Visible,                                    # let Steam and the game come to the front as usual (default: the game window stays off-screen, never takes the focus, no taskbar button; Steam's launch dialog is hidden)
     [switch]$Audible,                                    # keep the game's sound (default: muted in the volume mixer during runs; un-muted before the benchmark closes it)
@@ -623,6 +625,18 @@ function Start-BenchGame([string]$why) {
     $game
 }
 
+<# Fork-local (2026-10-23): waits for a save loaded from the main menu to be in the world. A save made in an
+   interior loads into L_PersistentDungeon, the main menu's own level, and the main menu's loading-screen and menu
+   objects stay (loadscreen=1 mainmenu=1 with the player live; "obj gc" does not remove them), as after a fresh start
+   until the first teleport. So for an interior (a sublevel loaded, HUD up) loadscreen is not checked. #>
+$inSaveInterior = { param($s) $s.pawn -eq '1' -and $s.frozen -eq '0' -and $s.travel -ne '1' -and $s.level -eq 'L_PersistentDungeon' -and
+                    $s.sub -and $s.subloaded -eq '1' -and $s.hud -eq '1' -and $s.menu -ne '1' }
+function Wait-SaveLoaded {
+    $s = Wait-BenchState { param($s) (& $inWorld $s) -or (& $inSaveInterior $s) } -TimeoutSec 300 -Stable 6 -PollMs 500
+    if ($s -and $s.loadscreen -eq '1') { Step "save loaded in an interior ($($s.sub)); the main menu's loading-screen object is still there" }
+    $s
+}
+
 <# From the main menu into the world: a new game with the default character (-Start fresh), or a save. #>
 function Enter-World {
     # -Watch: black over the view from here (start cell, HUD before spectator mode, teleports) until a scene shows
@@ -638,8 +652,8 @@ function Enter-World {
         if ($msg -notmatch 'Continue') { throw "expected the 'Continue from your last saved game?' box, got: $msg" }
         Send-Bench 'msg 0' -TimeoutMs 60000 | Out-Null
         Wait-Game 2
-        $s = Wait-BenchState $inWorld -TimeoutSec 300 -Stable 6 -PollMs 500
-        if (-not $s) { throw 'the save did not load' }
+        $s = Wait-SaveLoaded
+        if (-not $s) { throw "the save did not load (state: $(Send-Bench 'state' -TimeoutMs 5000 -NoThrow))" }
         # Continue loads the newest save. If that is not quicksave.sav (an autosave or a save made
         # later), load the quicksave from in the world. The scenario's "save" says where it is.
         $qs = Opt $scn 'save' $null
@@ -648,7 +662,12 @@ function Enter-World {
             Step "loaded save is elsewhere ($($s.level) $($s.x),$($s.y)): loading quicksave.sav"
             Send-Bench 'quickload' | Out-Null
             Wait-Game 4
-            $s = Wait-BenchState $inWorld -TimeoutSec 300 -Stable 6 -PollMs 500
+            # Fork-local (2026-10-23): wait for the player at the save's position, not just "in the world": the old
+            # world can still answer for a few seconds after the request, and an interior save needs $inSaveInterior.
+            $atSave = { param($s) ((& $inWorld $s) -or (& $inSaveInterior $s)) -and (-not $qs -or
+                        (Get-Dist $s ([pscustomobject]@{ x = $qs.pos[0]; y = $qs.pos[1]; z = $qs.pos[2] })) -lt 1500) }
+            $s = Wait-BenchState $atSave -TimeoutSec 120 -Stable 6 -PollMs 500
+            if (-not $s) { $s = Get-BenchState }
             if (-not $s) { throw 'the quicksave did not load' }
             if ($qs -and (Get-Dist $s ([pscustomobject]@{ x = $qs.pos[0]; y = $qs.pos[1]; z = $qs.pos[2] })) -gt 1500) {
                 throw "quicksave.sav is not the save this scenario was made for (player at $($s.x),$($s.y), expected $($qs.pos -join ','))"
@@ -992,6 +1011,8 @@ function Invoke-Session([string]$kind, [string]$runDir, [object[]]$sceneList, [i
             if ($state.aiOff) { Send-Bench 'obv tai' | Out-Null; $state.aiOff = $false }      # left over from an aborted visual pass
             Save-SessionState $state
             foreach ($p in $scn.settings.PSObject.Properties) { Send-Bench "cvar $($p.Name) $($p.Value)" | Out-Null }
+            # fork-local: scenario "bench": [...] = mod commands after the settings, replies logged (e.g. "prop <Class> <Property> [value]")
+            foreach ($c in @(Opt $scn 'bench' @())) { Step "bench $c -> $(Send-Bench $c)" }
             Step "profile $Profile`: $(Opt $prof 'description' '')"
             if ($pinOn) { Step 'conditions pinned (-Pin): every scene gets its weather (held), hour and timescale' }
             elseif ($script:pinRefused) { Warn "scenario $($scn.name) says ""pin"": false (it tests weather changes): -Pin ignored" }
@@ -1085,13 +1106,13 @@ function Invoke-Session([string]$kind, [string]$runDir, [object[]]$sceneList, [i
         # -LegShots: a capture loop on its own runspace (same process, so BenchLib's types are loaded) that saves the
         # window every $intervalMs as <dir>\<QPC ms>.png until stopped (at most 120 s); line the files up with the
         # leg's activation and arrival by their QPC names
-        function Start-LegShots([string]$dir, [int]$intervalMs) {
+        function Start-LegShots([string]$dir, [int]$intervalMs, [double]$maxMs = 120000) {
             New-Item -ItemType Directory -Force $dir | Out-Null
             $sync = [hashtable]::Synchronized(@{ stop = $false; n = 0 })
             $ps = [powershell]::Create()
             [void]$ps.AddScript({
-                param($hwnd, $dir, $intervalMs, $sync)
-                $end = [OblvBench.Clock]::QpcMs() + 120000
+                param($hwnd, $dir, $intervalMs, $sync, $maxMs, $crop)
+                $end = [OblvBench.Clock]::QpcMs() + $maxMs
                 while (-not $sync.stop -and [OblvBench.Clock]::QpcMs() -lt $end) {
                     $t = [OblvBench.Clock]::QpcMs()
                     try {
@@ -1101,13 +1122,56 @@ function Invoke-Session([string]$kind, [string]$runDir, [object[]]$sceneList, [i
                             $h = [int]($b.Height * 640 / $b.Width)
                             $s = New-Object System.Drawing.Bitmap $b, 640, $h
                             try { $s.Save((Join-Path $dir ('{0:F0}.jpg' -f $t)), [System.Drawing.Imaging.ImageFormat]::Jpeg) } finally { $s.Dispose() }
+                            # fork-local -LegShotsCrop: also the centre 1280x720 at full resolution, lossless, to judge detail
+                            if ($crop -and $b.Width -ge 1280 -and $b.Height -ge 720) {
+                                $r = New-Object System.Drawing.Rectangle ([int](($b.Width - 1280) / 2)), ([int](($b.Height - 720) / 2)), 1280, 720
+                                # $env:OBLV_CROP = "x,y,w,h": another region instead (2026-10-24, fade-watch)
+                                if ($env:OBLV_CROP -match '^(\d+),(\d+),(\d+),(\d+)$' -and [int]$Matches[1] + [int]$Matches[3] -le $b.Width -and [int]$Matches[2] + [int]$Matches[4] -le $b.Height) {
+                                    $r = New-Object System.Drawing.Rectangle ([int]$Matches[1]), ([int]$Matches[2]), ([int]$Matches[3]), ([int]$Matches[4])
+                                }
+                                $c = $b.Clone($r, $b.PixelFormat)
+                                try { $c.Save((Join-Path $dir ('{0:F0}-crop.png' -f $t)), [System.Drawing.Imaging.ImageFormat]::Png) } finally { $c.Dispose() }
+                            }
                         } finally { $b.Dispose() }
                         $sync.n++
                     } catch { }
                     $wait = $intervalMs - ([OblvBench.Clock]::QpcMs() - $t)
                     if ($wait -gt 0) { Start-Sleep -Milliseconds ([int]$wait) }
                 }
-            }).AddArgument($hwnd).AddArgument($dir).AddArgument($intervalMs).AddArgument($sync)
+            }).AddArgument($hwnd).AddArgument($dir).AddArgument($intervalMs).AddArgument($sync).AddArgument($maxMs).AddArgument([bool]$LegShotsCrop)
+            @{ PS = $ps; Handle = $ps.BeginInvoke(); Sync = $sync }
+        }
+        # fork-local scene option "stay" (flights): the whole window every n ms while the player is held still after
+        # arriving, 1280 px wide PNG (<QPC ms>.png, for frame differencing), plus the full resolution as JPEG (quality 95)
+        # every fullEvery-th capture (<QPC ms>-full.jpg, to look at what changed)
+        function Start-StayShots([string]$dir, [int]$intervalMs, [double]$maxMs, [int]$fullEvery) {
+            New-Item -ItemType Directory -Force $dir | Out-Null
+            $sync = [hashtable]::Synchronized(@{ stop = $false; n = 0 })
+            $ps = [powershell]::Create()
+            [void]$ps.AddScript({
+                param($hwnd, $dir, $intervalMs, $sync, $maxMs, $fullEvery)
+                $jpg = [System.Drawing.Imaging.ImageCodecInfo]::GetImageEncoders() | Where-Object { $_.MimeType -eq 'image/jpeg' }
+                $ep = New-Object System.Drawing.Imaging.EncoderParameters 1
+                $ep.Param[0] = New-Object System.Drawing.Imaging.EncoderParameter ([System.Drawing.Imaging.Encoder]::Quality), ([long]95)
+                $end = [OblvBench.Clock]::QpcMs() + $maxMs
+                $i = 0
+                while (-not $sync.stop -and [OblvBench.Clock]::QpcMs() -lt $end) {
+                    $t = [OblvBench.Clock]::QpcMs()
+                    try {
+                        $b = [OblvBench.ImageTools]::Capture($hwnd)
+                        try {
+                            $h = [int]($b.Height * 1280 / $b.Width)
+                            $s = New-Object System.Drawing.Bitmap $b, 1280, $h
+                            try { $s.Save((Join-Path $dir ('{0:F0}.png' -f $t)), [System.Drawing.Imaging.ImageFormat]::Png) } finally { $s.Dispose() }
+                            if ($i % $fullEvery -eq 0) { $b.Save((Join-Path $dir ('{0:F0}-full.jpg' -f $t)), $jpg, $ep) }
+                        } finally { $b.Dispose() }
+                        $sync.n++
+                    } catch { }
+                    $i++
+                    $wait = $intervalMs - ([OblvBench.Clock]::QpcMs() - $t)
+                    if ($wait -gt 0) { Start-Sleep -Milliseconds ([int]$wait) }
+                }
+            }).AddArgument($hwnd).AddArgument($dir).AddArgument($intervalMs).AddArgument($sync).AddArgument($maxMs).AddArgument($fullEvery)
             @{ PS = $ps; Handle = $ps.BeginInvoke(); Sync = $sync }
         }
         function Stop-LegShots($h) {
@@ -1500,8 +1564,10 @@ function Invoke-Session([string]$kind, [string]$runDir, [object[]]$sceneList, [i
                             Wait-Game 1.5; $r = Send-Bench "aim $aim" -NoThrow; if ($r) { Step "  $r" }
                         }
                         Wait-Game $settle
+                        $measureSec = [double](Opt $scene 'measure' $scn.defaults.measure)
+                        $sceneLoop = if ($SceneShots -gt 0) { Start-LegShots (Join-Path $shotDir "$($scene.id)-scene") $SceneShots ($measureSec * 1000 + 2000) } else { $null }
                         $t0 = Get-QpcMs
-                        Wait-Game ([double](Opt $scene 'measure' $scn.defaults.measure))
+                        try { Wait-Game $measureSec } finally { Stop-LegShots $sceneLoop }
                         $t1 = Get-QpcMs
                         if ($aim) {   # characters walk about: stand in front of it again, then look at its head
                             $r = Send-Bench "aim $aim front" -NoThrow; if ($r) { Step "  $r" }
@@ -1539,12 +1605,15 @@ function Invoke-Session([string]$kind, [string]$runDir, [object[]]$sceneList, [i
                         $before = Get-BenchState
                         # a leg can be a map fast travel instead of a door ("fasttravel": "<map icon name>", see the ft verb)
                         $ftTarget = Opt $legDef 'fasttravel' $null
-                        if (-not $ftTarget) {
+                        # fork-local leg option "faceDoor": false when the player already faces the door (e.g. a save made there)
+                        if (-not $ftTarget -and [bool](Opt $legDef 'faceDoor' $true)) {
                             # A door leaves the player just in front of it, facing away (and door scenes start at such a
                             # spot): turn around so the door is under the crosshair.
                             Send-Bench ("look {0:F1} 0" -f (([double]$before.heading + 180) % 360)) | Out-Null
                         }
                         Wait-Game 1.5
+                        # fork-local: a leg's own mod commands, sent just before its door is activated (e.g. "exec r.VT.Flush")
+                        foreach ($c in @(Opt $legDef 'bench' @())) { Step "  $($scene.id)/${leg}: bench $c -> $(Send-Bench $c -TimeoutMs 60000)" }
                         $stackProc = $null
                         if ($Stacks) {
                             # what are the threads doing during the stall? time-stamped stack samples for Analyze-Hitch.ps1
@@ -1576,7 +1645,11 @@ function Invoke-Session([string]$kind, [string]$runDir, [object[]]$sceneList, [i
                             }
                         }
                         Send-Bench 'watch 1' | Out-Null
-                        $shotLoop = if ($LegShots -gt 0) { Start-LegShots (Join-Path $shotDir "$($scene.id)-$leg") $LegShots } else { $null }
+                        # fork-local scene option "stayCapture": the whole leg (loading screen, fade-in, hold) captured like a flight's
+                        # "stay" (1280 px PNG every -SceneShots ms, full-resolution JPEG every 5th) for mytools/Pop-Detect.ps1
+                        # fork-local scene option "stayFullEvery": a full-resolution JPEG every n-th capture (default 5)
+                        $shotLoop = if ([bool](Opt $scene 'stayCapture' $false)) { Start-StayShots (Join-Path $shotDir "$($scene.id)-$leg-stay") ([math]::Max(100, $SceneShots)) (($hold + 40) * 1000) ([int](Opt $scene 'stayFullEvery' 5)) }
+                                    elseif ($LegShots -gt 0) { Start-LegShots (Join-Path $shotDir "$($scene.id)-$leg") $LegShots } else { $null }
                         $t0 = Get-QpcMs
                         if ($ftTarget) { Send-Bench 'msg 0' | Out-Null }   # "Yes"
                         else { Send-Bench 'activate' | Out-Null }       # the game's Activate input action, injected: no window focus needed
@@ -1707,6 +1780,8 @@ function Invoke-Session([string]$kind, [string]$runDir, [object[]]$sceneList, [i
                         function ConvertTo-QpcMs([double]$clock) { if ($null -ne $ackClock) { $ackMs + 1000 * ($clock - $ackClock) } else { Get-QpcMs } }
                         $start = Wait-FlyEvent '^fly=(start|done)' (40 + $settle)
                         if (-not $start -or $start.Text -notmatch '^fly=start') { throw "the flight did not start: $(if ($start) { $start.Text } else { 'no answer' })" }
+                        # fork-local -SceneShots: also during the timed flight (until fly=done)
+                        $flyLoop = if ($SceneShots -gt 0) { Start-LegShots (Join-Path $shotDir "$($scene.id)-scene") $SceneShots ($expect * 1000 + 15000) } else { $null }
                         $music = $null
                         if ($musicFile -and $start -and $scn.music.at.PSObject.Properties[$scene.id]) {
                             # from the track's offset for this scene, plus what has passed since the fade-in began
@@ -1715,7 +1790,35 @@ function Invoke-Session([string]$kind, [string]$runDir, [object[]]$sceneList, [i
                             $music = Start-Process $ffplay.Source -PassThru -WindowStyle Hidden -ArgumentList @('-nodisp', '-autoexit', '-loglevel', 'quiet',
                                 '-ss', ('{0:F2}' -f $from), '-t', ('{0:F2}' -f [math]::Max(1, $expect - $late)), "`"$musicFile`"")
                         }
-                        $done = Wait-FlyEvent '^fly=done' ($expect + 15)
+                        try { $done = Wait-FlyEvent '^fly=done' ($expect + 15) } finally { Stop-LegShots $flyLoop }
+                        # fork-local "stay": the flight holds the player at its end (its "stay" phase) for that many seconds,
+                        # captured with Start-StayShots (pop-in check); then the scene's own "bench" commands
+                        $stay = [double](Opt $scene 'stay' 0)
+                        if ($done -and $stay -gt 0) {
+                            Step "$($scene.id): holding still $stay s after arrival (captures every $([math]::Max(100, $SceneShots)) ms)"
+                            $stayLoop = Start-StayShots (Join-Path $shotDir "$($scene.id)-stay") ([math]::Max(100, $SceneShots)) ($stay * 1000) 5
+                            try { Wait-Game $stay } finally { Stop-LegShots $stayLoop }
+                        }
+                        # fork-local "turns": then turn on the spot (degrees from the flight's final heading, one after another),
+                        # held in the air by airhold, each followed by "turnStay" seconds of captures (shots\<scene>-turn<k>)
+                        $turns = @(Opt $scene 'turns' @())
+                        if ($done -and $turns.Count) {
+                            $endHeading = ([math]::Atan2($path[-1][0] - $path[-2][0], $path[-1][1] - $path[-2][1]) * 180 / [math]::PI + 360) % 360
+                            $turnStay = [double](Opt $scene 'turnStay' 10)
+                            for ($k = 0; $k -lt $turns.Count; $k++) {
+                                $st = Get-BenchState
+                                $hd = (($endHeading + [double]$turns[$k]) % 360 + 360) % 360
+                                $lp = Get-BenchLogLength
+                                Send-Bench ("airhold {0} {1} {2} {3:F1} {4}" -f $st.x, $st.y, $st.z, $hd, $pitch) | Out-Null
+                                # airhold takes over only when no flight holds the player: release the previous one if it did not
+                                Wait-Game 0.4
+                                if (-not @(Get-BenchEvents $lp | Where-Object { $_.Text -match '^airhold=caught' })) { Send-Bench 'flystop' | Out-Null }
+                                Step ("$($scene.id): turned to heading {0:F0} ({1:+0;-0} deg), holding $turnStay s" -f $hd, [double]$turns[$k])
+                                $turnLoop = Start-StayShots (Join-Path $shotDir "$($scene.id)-turn$($k + 1)") ([math]::Max(100, $SceneShots)) ($turnStay * 1000) 5
+                                try { Wait-Game $turnStay } finally { Stop-LegShots $turnLoop }
+                            }
+                        }
+                        foreach ($c in @(Opt $scene 'bench' @())) { Step "bench $c -> $(Send-Bench $c -TimeoutMs 60000)" }
                         $t0 = ConvertTo-QpcMs $start.Clock
                         $t1 = if ($done) { ConvertTo-QpcMs $done.Clock } else { Get-QpcMs }
                         if ($stackProc -and -not $stackProc.WaitForExit(30000)) { $stackProc.Kill(); Warn "$($scene.id): the stack sampler did not finish" }
@@ -2036,7 +2139,7 @@ function Get-SceneSeconds($s) {
         'fly'    {
             $len = 0; $p = @($s.path)
             for ($i = 1; $i -lt $p.Count; $i++) { $len += [math]::Sqrt([math]::Pow($p[$i][0] - $p[$i - 1][0], 2) + [math]::Pow($p[$i][1] - $p[$i - 1][1], 2) + [math]::Pow($p[$i][2] - $p[$i - 1][2], 2)) }
-            $settle + $len / [double]$s.speed + 18      # + teleport, lift to the first waypoint, easing in and out
+            $settle + $len / [double]$s.speed + 18 + [double](Opt $s 'stay' 0) + @(Opt $s 'turns' @()).Count * ([double](Opt $s 'turnStay' 10) + 2)      # + teleport, lift to the first waypoint, easing in and out; fork-local stay
         }
         default  { 30 }
     }

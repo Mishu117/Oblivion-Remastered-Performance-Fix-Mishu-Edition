@@ -1,0 +1,82 @@
+{
+  "name": "ic-door-pop",
+  "description": "Fork-local (2026-10-23): texture pop-in after a door exit in the Imperial City (the user: textures start in low quality when stepping outside). The Merchants Inn door in the Market District (from actors.json, noon, clear): in and out, each leg captured whole (\"stayCapture\": loading screen, fade-in and 15 s after, 1280 px PNG every -SceneShots ms and full resolution every 5th) for mytools/Pop-Detect.ps1. Run with -Profile own -SceneShots 200 -Pass perf; -FixIni for the variants.",
+  "settings": {},
+  "record": [
+    "r.Streaming.PoolSize",
+    "r.Nanite.Streaming.StreamingPoolSize",
+    "r.VT.PoolSizeScale",
+    "r.VT.MaxUploadsPerFrame",
+    "r.VT.MaxTilesProducedPerFrame",
+    "r.VT.MaxContinuousUpdatesPerFrame",
+    "r.VT.EnableFeedback",
+    "r.VT.FeedbackFactor",
+    "r.VT.RVT.TileCountBias",
+    "r.VT.MaxReleasedPerFrame",
+    "r.VT.ProduceLockedTilesOnFlush",
+    "r.Shadow.Virtual.Enable",
+    "r.Shadow.Virtual.Cache",
+    "r.StaticMeshLODDistanceScale",
+    "r.ViewDistanceScale",
+    "foliage.LODDistanceScale",
+    "grass.CullDistanceScale",
+    "grass.DensityScale",
+    "sg.ViewDistanceQuality",
+    "sg.FoliageQuality",
+    "sg.TextureQuality",
+    "sg.ShadowQuality",
+    "r.Streaming.Boost",
+    "r.Streaming.FramesForFullUpdate",
+    "r.Streaming.UseAllMips",
+    "r.Streaming.FullyLoadUsedTextures"
+  ],
+  "masks": [
+    [
+      0.94,
+      0.0,
+      0.06,
+      0.035
+    ]
+  ],
+  "defaults": {
+    "hour": 12,
+    "weather": "Clear",
+    "settle": 8,
+    "measure": 20,
+    "hold": 15
+  },
+  "weathers": {
+    "Clear": "00038EEE",
+    "Cloudy": "00038EF0"
+  },
+  "places": {
+    "ic-market-inn": {
+      "world": "ICMarketDistrict",
+      "pos": [
+        33298.3,
+        68771.1,
+        3550.0
+      ],
+      "heading": 41.3,
+      "pitch": 0
+    }
+  },
+  "scenes": [
+    {
+      "id": "ic-inn-door",
+      "type": "door",
+      "at": "ic-market-inn",
+      "hour": 12,
+      "weather": "Clear",
+      "enter": "0002C3DC",
+      "exit": "0002C26D",
+      "hold": 15,
+      "stayCapture": true,
+      "tags": [
+        "city",
+        "transition"
+      ],
+      "comment": "Into The Merchants Inn and back out into the Market District"
+    }
+  ]
+}
