@@ -1,4 +1,4 @@
-// HdrSaveThumbnail (fork-local, trade-off) self-test, included by selftest.cpp: the save's screenshot callback's copy call
+// HdrSaveThumbnail (trade-off) self-test, included by selftest.cpp: the save's screenshot callback's copy call
 // on the mapped exe, SaveThumbnailAsync's view of it (the game's copy behind the stub), and the wrapper with a fake copy
 // and fake console variables (HDR10 converts the holder, SDR / scRGB / off leave the copy as it is).
 #pragma once

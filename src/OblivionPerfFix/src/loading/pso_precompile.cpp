@@ -118,7 +118,7 @@ std::atomic<float> g_budgetMs{4.0f};    // PsoPrecompileFastBudgetMs: render-thr
 std::atomic<int> g_coldQueue{1000};     // PsoPrecompileColdQueue: fetched-not-dispatched pipelines that mean "the driver compiles"
                                         // (0: no cold-cache guard at all: no queue, driver-thread or 60 s limit)
 std::atomic<bool> g_cold{false};        // this precompile goes slowly (cold driver cache): the game's own pace until it ends
-std::atomic<bool> g_screenHold{false};  // fork-local ShaderScreenAfterDriverChange took the game's first-launch path: until the
+std::atomic<bool> g_screenHold{false};  // ShaderScreenAfterDriverChange took the game's first-launch path: until the
                                         // main menu (nobody can interact behind that screen) UE's Fast values, cold or not
 std::atomic<bool> g_loadingNow{false};  // the game thread's last look: a loading screen (the freeze subsystem's loading mode)
 std::atomic<bool> g_appliedBounded{false};  // the faster pace was applied with the bounded budget (not UE's Fast values)
@@ -329,7 +329,12 @@ void Look(ULONGLONG now)
         g_doneMs = now;
         Event("[pso] +%.1f s: shader precompile finished (seen from +%.1f s; %.1f s at the Fast pace, %.1f s at the game's)",
               now / 1000.0, g_firstSeenMs.load() / 1000.0, g_fastMs.load() / 1000.0, g_gameModeMs.load() / 1000.0);
-        ShaderScreenPrecompileFinished();  // fork-local ShaderScreenAfterDriverChange: no-op unless it took the first-launch path
+        ShaderScreenPrecompileFinished();  // ShaderScreenAfterDriverChange: no-op unless it took the first-launch path
+    } else if (!running && g_menuSeen) {
+        // ShaderScreenAfterDriverChange (no-op unless a record is pending): the main menu with no precompile running also
+        // means it is done (a precompile that ended before this thread's first look is never seen finishing; without this
+        // the screen would come back at every start-up)
+        ShaderScreenPrecompileFinished();
     }
     g_running = running;
     g_lastCheck = now;

@@ -1,4 +1,4 @@
-// VramCounterFix (fork-local, game bug) self-test, included by selftest.cpp: the query and its two calls on the mapped
+// VramCounterFix (game bug) self-test, included by selftest.cpp: the query and its two calls on the mapped
 // exe, and the wrapper with a fake query and a fake DXGI sample (0/0 filled, the game's own numbers passed through, off
 // passes through, no sample yet leaves 0/0).
 #pragma once

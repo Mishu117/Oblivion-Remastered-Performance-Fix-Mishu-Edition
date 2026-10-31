@@ -1,6 +1,6 @@
-// Fork-local diagnostic DoorDiag (off by default; [Fixes] DoorDiag=1, read at start-up). Not a fix: with
+// Diagnostic DoorDiag (off by default; [Fixes] DoorDiag=1, read at start-up). Not a fix: with
 // DoorDiagEarlyStream=0 nothing the game does changes, the hooks only time and count. Written for the feasibility check
-// of "stream the destination's textures behind the loading screen". Logs, tag [doordiag]:
+// of "stream the destination's textures behind the loading screen" (StreamBehindLoadingScreen). Logs, tag [doordiag]:
 //
 //  - the loading-screen timeline of every door, city gate or fast travel (game thread, once per frame from
 //    NpcCreationPacing's frame hook): when the transition's freeze starts, when its heavy loading frames end and the

@@ -1,4 +1,4 @@
-// HdrMenuRows (fork-local) self-test, included by selftest.cpp: the engine helpers it calls are found where build
+// HdrMenuRows self-test, included by selftest.cpp: the engine helpers it calls are found where build
 // 19115871 has them (the rows themselves are runtime data: checked live).
 #pragma once
 
@@ -54,7 +54,7 @@ inline void Run(const opf::GameModule& game)
 
     // HudAspectRow: ProcessEvent, and the padding for a centred box (5120x2160 at scale 2 = 2560x1080 Slate units)
     Check(FindProcessEvent() == game.base + 0x10F3EA0, "hud aspect: UObject::ProcessEvent at exe+0x10F3EA0 (by its prologue)");
-    Check(FindVtStreamingUploads(), "hud aspect: the console manager's int registration site (VtStreamingUploads') found");
+    Check(HudAspectIntRegistrationFound(), "hud aspect: the console manager's int registration site (r.VT.MaxUploadsPerFrame.Streaming's) found once");
     auto approx = [](float a, float b) { return a > b - 0.01f && a < b + 0.01f; };
     Check(approx(HudPadding(5120, 2160, 2, 16.f / 9.f), 320.f) && approx(HudPadding(5120, 2160, 2, 4.f / 3.f), 560.f) &&
               approx(HudPadding(5120, 2160, 2, 21.f / 9.f), 20.f),

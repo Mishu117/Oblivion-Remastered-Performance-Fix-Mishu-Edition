@@ -444,22 +444,6 @@ function Get-SteamLaunchProblem([datetime]$Since) {
     $null
 }
 
-<# Fork-local (2026-10-23, GPU spike traces): with $env:OBLV_NSYS_OUT set (a report path without extension), the game
-   exe is started directly under Nsight Systems (D3D12 API calls and each command list's GPU time; no administrator
-   rights needed) instead of through Steam; Steam's app id goes in the environment so the Steam API attaches to the
-   running Steam client. nsys writes the report when the game exits. The launch may take the keyboard focus once
-   (it does not go through the WMI route Start-SteamLaunch uses). #>
-function Start-NsysLaunch {
-    $nsys = if ($env:OBLV_NSYS_EXE) { $env:OBLV_NSYS_EXE } else { 'C:\Program Files\NVIDIA Corporation\Nsight Systems 2026.5.1\target-windows-x64\nsys.exe' }
-    if (-not (Test-Path -LiteralPath $nsys)) { throw "Nsight Systems not found at $nsys (set OBLV_NSYS_EXE)" }
-    $exe = (Get-OblivionGame).Exe
-    $env:SteamAppId = "$($script:SteamAppId)"; $env:SteamGameId = "$($script:SteamAppId)"
-    $nsArgs = @('profile', '--trace=dx12', '--dx12-gpu-workload=individual', '--dx12-wait-calls=false', '--sample=none', '--cpuctxsw=none',
-              "--output=`"$($env:OBLV_NSYS_OUT)`"", '--force-overwrite=true', "`"$exe`"")
-    $script:NsysProcess = Start-Process -FilePath $nsys -ArgumentList $nsArgs -WindowStyle Hidden -PassThru
-    Write-Host "launched under Nsight Systems (pid $($script:NsysProcess.Id)): $($env:OBLV_NSYS_OUT).nsys-rep"
-}
-
 # ---------------------------------------------------------------- crash evidence (2026-10-20, worker npcpromo)
 
 if (-not ('OblvBench.ProcessFreeze' -as [type])) {
@@ -601,11 +585,10 @@ function Start-Game {
         if (-not ('OblvBench.CpuLimitJob' -as [type])) { Add-Type -Path (Join-Path $PSScriptRoot 'CpuLimitJob.cs') }
         Write-Host ([OblvBench.CpuLimitJob]::Arm($CpuMask, [string[]]@($script:GameProcesses | ForEach-Object { "$_.exe" }), ($TimeoutSec + 30) * 1000))
     }
-    $viaNsys = [bool]$env:OBLV_NSYS_OUT
-    if ($viaNsys) { Start-NsysLaunch } else { Start-OblivionLaunch -GameArgs $GameArgs }
+    Start-OblivionLaunch -GameArgs $GameArgs
     $sw = [Diagnostics.Stopwatch]::StartNew(); $asked = 1; $checked = 0
     while (-not ($p = Get-Game)) {
-        if (-not $viaNsys -and $script:GameLaunchMethod -eq 'Steam') {
+        if ($script:GameLaunchMethod -eq 'Steam') {
             if ($sw.Elapsed.TotalSeconds -gt 60 * $asked -and $asked -lt 2) { Start-SteamLaunch -GameArgs $GameArgs; $asked++ }   # Steam sometimes drops the first request
             if ($sw.Elapsed.TotalSeconds -gt $checked + 10) {   # a known Steam reason ends the wait early
                 $checked = $sw.Elapsed.TotalSeconds
@@ -636,7 +619,8 @@ function Start-Game {
         Assert-GameOk
         $p.Refresh()
         if ([OblvBench.GameWatch]::FindGameWindow($p.Id) -ne [IntPtr]::Zero -and (Read-BenchLogFrom 0) -match 'LOADED bench\.lua') { break }   # not MainWindowHandle: it skips owned windows (-Record)
-        if ($sw.Elapsed.TotalSeconds -gt $TimeoutSec) { throw "No window / OblvBench mod within $TimeoutSec s. Is UE4SS installed (tools\Install-UE4SS.ps1)?" }
+        # (not while the game's first-launch shader screen is up: GameWatch.InShaderScreenGrace, bounded)
+        if ($sw.Elapsed.TotalSeconds -gt $TimeoutSec -and -not [OblvBench.GameWatch]::InShaderScreenGrace) { throw "No window / OblvBench mod within $TimeoutSec s. Is UE4SS installed (tools\Install-UE4SS.ps1)?" }
         Start-Sleep -Milliseconds 500
     }
     $p
@@ -684,8 +668,7 @@ function Get-GameBusyReason {
     }
     $mine = $PID
     $busy = Get-CimInstance Win32_Process -Filter "Name='powershell.exe' or Name='pwsh.exe' or Name like 'PresentMon%'" |
-        Where-Object { $_.ProcessId -ne $mine -and $_.CommandLine -match 'Profile-Oblivion|Run-ABTest|Sample-Stacks|Count-Calls|Trace-Vtable|Snap-Callers|Log-Args|Compare-Settings|Run-Benchmark|PresentMon' -and $_.CommandLine -notmatch 'Get-CimInstance' -and
-                       $_.Name -ne 'PresentMonService.exe' }   # fork-local (2026-10-26): Intel's PresentMon Shared Service is not a capture; an elevated runner sees its command line
+        Where-Object { $_.ProcessId -ne $mine -and $_.CommandLine -match 'Profile-Oblivion|Run-ABTest|Sample-Stacks|Count-Calls|Trace-Vtable|Snap-Callers|Log-Args|Compare-Settings|Run-Benchmark|PresentMon' -and $_.CommandLine -notmatch 'Get-CimInstance' }
     if ($busy) { return "another capture is running: " + (($busy | ForEach-Object { "pid $($_.ProcessId) $($_.Name)" }) -join ', ') }
     $null
 }

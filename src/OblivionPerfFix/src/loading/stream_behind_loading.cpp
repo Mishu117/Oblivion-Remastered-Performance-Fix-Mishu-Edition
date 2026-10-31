@@ -39,15 +39,14 @@
 // above) the bit is cleared, so the world is drawn behind the opaque loading screen while it runs; if the unfreeze call
 // fails, the bit is set back at once. The fade gate's 0.5 s tick is skipped (its delegate's Execute / ExecuteIfSafe
 // vtable slots, pass-through otherwise) until the world has run long enough (below), at most kHoldCapUs; then the
-// game's own gate, fade-to-game and fade run as before. Until fork.27 a separate switch, DrawBehindLoadingScreen, drew
-// the frozen world without unfreezing it; on its own that was not enough (the player still dropped into place in
-// view), so it was removed.
+// game's own gate, fade-to-game and fade run as before. Drawing the frozen world without unfreezing it was tried as a
+// separate switch; on its own it was not enough (the player still dropped into place in view), so it was removed.
 //  - the gate delegate's thunks: add rcx,18h; jmp / call the gate body; their two .rdata slots (vtable exe+0x7D7BD78
 //    + 11 / 12 * 8); the transition object is at the delegate instance + 0x18;
 //  - UWorld::GetGameViewport (exe+0x385EE90) and the switch's tail (exe+0x31D86CA): call GetGameViewport; ...;
 //    and ecx,~2 / xor edx,1 / add edx,edx / or edx,ecx / mov [rax+6Ch],edx.
 //
-// Fork-local prototype UnfreezeBehindLoadingScreen (off by default; a TRADE-OFF: the world runs before it is seen).
+// Prototype UnfreezeBehindLoadingScreen (off by default; a TRADE-OFF: the world runs before it is seen).
 // After an interior entry the game unfreezes the world behind the loading screen as soon as the interior has loaded
 // (its level-loaded handler, exe+0x48354B0, calls the transition's SetLoadingFreeze(off)), so the player stands in an
 // idle pose and the area has rendered by the time the picture fades in. After an exit the freeze lasts until the game's
@@ -60,7 +59,7 @@
 // the same flag). Interiors (already unfrozen) are left alone.
 //  - SetLoadingFreeze: its whole body by pattern; the flag it tests and clears (+0x200) and the second flag it clears
 //    (+0x1F1) must be the fade hook's, and its "off" path must call the same two functions as the unfreeze timer body.
-// UnfreezeBehindLoadingScreenFastTravel (fork-local, ms, 0 = UnfreezeBehindLoadingScreen's value): the hold above after a
+// UnfreezeBehindLoadingScreenFastTravel (, ms, 0 = UnfreezeBehindLoadingScreen's value): the hold above after a
 // fast travel. A fast travel is recognised by the map menu's VMapMenuViewModel::DelayFastTravelRequestUntilFadeEnd(true),
 // called once per map fast travel (UE4SS hook in a probe game; doors and teleports do not call it). Its exec thunk (found
 // by the registered name, exe+0x468ACF0) reads the bool and calls the function (exe+0x4918830) at +0x6E; that call goes
@@ -70,13 +69,13 @@
 // Loading a save gets the same hold. A load reads its save through the engine's save system (ISaveGameSystem's
 // LoadGame, vtable +0x38, next to SaveGame at +0x28; this build: FGenericSaveGameSystem, LoadGame exe+0x35876B0), from
 // the main menu as from the pause menu's Load, while a door, a gate or a fast travel reads none; the Load list itself
-// reads none either (logged in the user's play: two loads, each with one LoadGame of its slot, and doors without). So
+// reads none either (logged in play: two loads, each with one LoadGame of its slot, and doors without). So
 // a transition counts as a save load when a save other than the settings' was read since the previous transition
 // ended (the read comes before the arming from the main menu and between two armings from the pause menu; the check is
 // made when the hold is needed). The save system is the one the settings save's writer uses: that function (found by
 // pattern, HdrMenuRows's kSaveWriter) gets the platform features module and its save system (+0x40) and calls its
 // SaveGame (+0x28); its LoadGame slot is redirected once, on the first frame after start-up, to a stub that notes the
-// time and calls it. Not usable (seen in the user's play): who arms the gate (the timer, the old engine's level change
+// time and calls it. Not usable (seen in play): who arms the gate (the timer, the old engine's level change
 // and the doors' path each carried both loads and doors), and a menu just before the arming (also before doors).
 #include "common.h"
 
@@ -239,6 +238,38 @@ uint64_t NowUs()
 unsigned Rva(const void* p) { return static_cast<unsigned>(static_cast<const uint8_t*>(p) - Game().base); }
 
 uint32_t Disp32(const uint8_t* at) { return *reinterpret_cast<const uint32_t*>(at); }
+
+// An exec function (UFunction thunk) by its registered name. The engine's native function tables are {const char* name,
+// function} pairs: the name's one copy in .rdata (a whole string), the pairs that point to it and to code (.rdata or
+// .data, 8-byte aligned), and of their functions the one that matches `shape`. nullptr unless each is exactly one.
+uint8_t* ExecByName(const char* name, const char* shape)
+{
+    const Pattern pattern = ParsePattern(shape);
+    const GameModule& game = Game();
+    const size_t len = strlen(name) + 1;
+    const uint8_t* str = nullptr;
+    int copies = 0;
+    for (const uint8_t* p = game.rdata.begin + 1; p + len <= game.rdata.end; ++p) {
+        p = static_cast<const uint8_t*>(memchr(p, name[0], static_cast<size_t>(game.rdata.end - p)));
+        if (!p || p + len > game.rdata.end) break;
+        if (p[-1] == 0 && memcmp(p, name, len) == 0) {
+            str = p;
+            ++copies;
+        }
+    }
+    if (copies != 1) return nullptr;
+    uint8_t* fn = nullptr;
+    int pairs = 0;
+    for (const Section* sec : {&game.rdata, &game.data}) {
+        for (const uint8_t* q = sec->begin; q + 16 <= sec->end; q += 8) {
+            uint8_t* const code = *reinterpret_cast<uint8_t* const*>(q + 8);
+            if (*reinterpret_cast<const uint8_t* const*>(q) != str || !game.text.Contains(code) || !MatchesAt(code, pattern)) continue;
+            fn = code;
+            ++pairs;
+        }
+    }
+    return pairs == 1 ? fn : nullptr;
+}
 
 bool Find(const GameModule& game)
 {
@@ -633,7 +664,7 @@ bool FindStreamBehindLoading(StreamBehindLoadingInfo* out)
     return true;
 }
 
-bool InstallStreamBehindLoading(bool beforeGameCode)
+bool InstallStreamBehindLoading(bool beforeGameCode, bool tradeOffs)
 {
     if (g.installed) return true;
     if (!FindStreamBehindLoading(nullptr)) return false;
@@ -655,6 +686,16 @@ bool InstallStreamBehindLoading(bool beforeGameCode)
     if (!PatchEntry(g.arm, region, beforeGameCode)) {
         Log("[streamload] could not detour the gate-arming function at exe+0x%X: not installed", Rva(g.arm));
         return false;
+    }
+    // The trade-off's redirections (the gate delegate's two slots, the fast-travel thunk's call, and on the first frame
+    // the save system's LoadGame slot) only when UnfreezeBehindLoadingScreen is on at start-up: with the default the
+    // only change to the game's code is the gate-arming detour above.
+    g.loadHookTried = !tradeOffs;
+    if (!tradeOffs) {
+        g.installed = true;
+        Log("[streamload] installed: textures of a new area stream behind the loading screen once its loading is done "
+            "(UnfreezeBehindLoadingScreen 0 at start-up: its hooks not installed; takes a restart to switch on)");
+        return true;
     }
     if (g.drawFound) {  // pass-through until UnfreezeBehindLoadingScreen holds a tick
         if (WritePointer(g.execSlot, reinterpret_cast<void*>(&ExecHook)) &&
@@ -807,5 +848,7 @@ void LogStreamBehindLoadingStats()
         "on average)", g.on.load() ? "on" : "off", g.transitions.load(), g.fastTravels.load(), g.saveLoads.load(), n,
         n ? g.leadUs.load() / 1000.0 / n : 0.0);
 }
+
+uint8_t* FindExecByName(const char* name, const char* shape) { return ExecByName(name, shape); }
 
 }  // namespace opf

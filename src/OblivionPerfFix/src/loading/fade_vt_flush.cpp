@@ -1,4 +1,4 @@
-// FadeVtFlushSkip (fork-local switch, off by default): skips the virtual texture flush the game runs during a door's
+// FadeVtFlushSkip (switch, off by default): skips the virtual texture flush the game runs during a door's
 // fade-in.
 //
 // Fade-to-game (exe+0x4877E80) arms, besides the unfreeze timer, a second timer when the transition asks for it
@@ -7,14 +7,14 @@
 // exe+0x48774E0, which runs the console command r.VT.Flush: every virtual texture page is dropped and fetched again
 // while the picture is ~60-70 % faded in. At the Imperial City Waterfront lighthouse exit the distant walls and roofs
 // lose their detail (-9..-17 % 1-px detail) and refill over ~2 s with VtStreamingUploads 64, ~8 s with the game's 4
-// uploads per frame (docs/research.md, "The fade-in's virtual texture flush").
+// uploads per frame (docs/research.md, FadeVtFlushSkip).
 //
 // With FadeVtFlushSkip=1 (installed only if on at start-up, then switched live) the delegate's two .rdata slots point
 // to stubs that skip the call (and log it) while the key is on and pass through to the game's thunks otherwise. The
 // timer itself is armed and fires as before. Why the game flushes is not known (fresh pages for the new location, e.g.
 // runtime virtual textures generated before the area had loaded): skipping it changes the picture during the fade (no
-// drop and refill) and, in 14 transitions x 4 runs, not the settled picture beyond run-to-run noise.
-// Not "identical output" in upstream's sense, so fork-local and off by default.
+// drop and refill) and, in 14 transitions x 4 runs, not the settled picture beyond run-to-run noise
+// (docs/research.md). Not "identical output" in this project's sense, so off by default.
 //
 // Search: the flush function by its prologue up to `lea rdx,[name]`, the name being the only UTF-16 "r.VT.Flush" in
 // .rdata; the two thunks (add rcx,18h / jmp flush; and the ExecuteIfSafe wrapper calling it, returning true) by
@@ -150,7 +150,7 @@ bool InstallFadeVtFlushSkip()
         return false;
     }
     g_installed = true;
-    Log("[vtflush] installed: the fade-in's r.VT.Flush can be skipped (FadeVtFlushSkip, fork-local)");
+    Log("[vtflush] installed: the fade-in's r.VT.Flush can be skipped (FadeVtFlushSkip, )");
     return true;
 }
 

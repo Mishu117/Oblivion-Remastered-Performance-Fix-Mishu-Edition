@@ -1,4 +1,4 @@
-// Fork-local diagnostic DoorDiag self-test, included by selftest.cpp: its sites on the mapped exe (locate only; the
+// Diagnostic DoorDiag self-test, included by selftest.cpp: its sites on the mapped exe (locate only; the
 // diagnostic is never installed in the test). Checks named "at exe+0x..." pin build 19115871.
 #pragma once
 

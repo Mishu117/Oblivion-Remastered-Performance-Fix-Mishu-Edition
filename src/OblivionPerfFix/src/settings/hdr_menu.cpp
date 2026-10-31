@@ -1,4 +1,4 @@
-// HdrMenuRows (fork-local, 2026-10-27, off in the shipped ini): an HDR section in the game's own PC Graphics settings
+// HdrMenuRows (off by default): an HDR section in the game's own PC Graphics settings
 // page, between "General" and "Quality": HDR On / Off, Peak Brightness, Paper White, Black Floor, Mid-Tone.
 //
 // The settings pages are data:
@@ -51,10 +51,10 @@
 // What changes: a fourth section on the PC Graphics page, and Brightness Intensity greyed out while HDR is on (it does
 // nothing then). Nothing else changes until the player uses the rows, apart
 // from the launch peak (with HDR on, the tone mapping uses the saved peak brightness from the start; stock: 1000 nits
-// until the value is changed) and paper white 200 instead of the engine's 300 when none is saved. Off in the shipped ini (a menu addition, not
+// until the value is changed) and paper white 200 instead of the engine's 300 when none is saved. Off by default (a menu addition, not
 // a speed-up). Installed only if on at start-up; needs NpcCreationPacing's frame hook.
 //
-// DlssRayReconstruction (fork-local, 2026-10-29, off in the shipped ini, trade-off: the picture changes when the player
+// DlssRayReconstruction (off by default, trade-off: the picture changes when the player
 // picks On) uses the same machinery for one row in the Graphics page's Advanced section (DT_Modern_Settings_GraphicsUpscaler):
 // "DLSS - Ray Reconstruction", Off / On, right after "DLSS - Frame Generation". The row is a full copy of the Frame
 // Generation row (its sub-type Upscaler and its platform flag included, so the widgets treat it as they treat the other
@@ -70,11 +70,11 @@
 // table has no entry, so the game greys and enables the row with the other DLSS rows (seen in a probe game). The other
 // caller of the table (exe+0x4756410) is left alone.
 //
-// HudAspectRow (fork-local, 2026-10-29, off in the shipped ini): a "HUD Aspect Ratio" row in the Graphics page's General
+// HudAspectRow (off by default): a "HUD Aspect Ratio" row in the Graphics page's General
 // section, after Frame Rate Limit and before Show FPS: Wide (the default, the game's HUD), 4:3, 16:9, 21:9, 32:9. The
 // row is a copy of Show FPS (sub-type, platform flag) with five steps built from its first step, each running
 // OPF.HudAspect 0..4: a console variable this registers with the console manager's int RegisterConsoleVariable (slot
-// +0x18, the call the game's own int variables use, checked through VtStreamingUploads' registration site). The HUD is
+// +0x18, the call the game's own int variables use, checked at the registration of r.VT.MaxUploadsPerFrame.Streaming). The HUD is
 // WBP_ModernHud_PrimaryLayout_C, the widget in the primary game layout's GameStack (menus, loading screens and fades are
 // in the layout's other stacks, seen in probe games). Its root overlay holds the vignette (WBP_Modern_Hud_Vignette_C:
 // the full-screen effects such as low health), subtitles, the main HUD, the reticle, quick keys and notifications.
@@ -304,6 +304,15 @@ struct State {
     int patches = 0;
     std::string save;             // Save_Settings.sav as it was soon after the DLL loaded (before the game writes it back)
     std::atomic<bool> saveRead{false};  // set by the monitor thread once `save` is filled (read by the game thread after)
+    std::wstring savePath;        // the file read (monitor thread, before saveRead)
+    uint64_t saveTime = 0;        // its last-write time then (FILETIME)
+    std::atomic<bool> keepWaiting{false};  // game thread: options wait for the game's own write of the file
+    std::atomic<bool> gameWrote{false};    // monitor thread: the file's last-write time changed since it was read
+    uint8_t* keepGus = nullptr;   // the settings object the waiting options go to (game thread)
+    struct KeepItem { const char* const* keys; size_t count; const char* what; };
+    KeepItem keepItems[3] = {};   // the waiting option groups (HDR, Ray Reconstruction, HUD aspect)
+    int keepCount = 0;
+    uint64_t keepSinceMs = 0;
     uint32_t syncAt = 0;          // the frame of SyncCvars' second step (0 = none)
     int32_t syncNits = 0;         // ... the WhitePoint it sets (0 = none)
     bool syncOff = false;         // ... and whether it sets HDR 0
@@ -704,15 +713,15 @@ constexpr const char* kSavedKeys[] = {"Altar.GraphicsOptions.HDR", "Altar.Graphi
                                       "r.HDR.Display.MinLuminanceLog10", "r.HDR.Display.MidLuminance"};
 constexpr const char* kRrKey = "r.NGX.DLSS.DenoiserMode";
 
-void KeepSavedOptions(uint8_t* gus, const char* const* keys, size_t count, const char* what)
+// Review fix (mishu-b, 2026-10-31): the options are added and the file written only after the game has written the file
+// itself in this session (its last-write time changed since the monitor thread read it). The writer serialises the whole
+// settings object; written before the game had loaded the player's saved options into it, it would replace them with
+// the object's defaults. Until then the options wait (KeepPendingTick, from the frame hook); if the game has not written
+// the file within kKeepGiveUpMs, nothing is written (the HDR options then last one more launch, as without the rows).
+constexpr uint64_t kKeepGiveUpMs = 600000;
+
+int AddSavedOptions(uint8_t* gus, const char* const* keys, size_t count)
 {
-    if (!s.saveRead.load(std::memory_order_acquire) || s.save.empty() || !s.addOrUpdate || !s.saveWriter) return;
-    // the slot name as the writer will use it (initialised by the exe's static constructors long before this)
-    const FStr* const slot = s.saveSlot;
-    if (!slot->data || slot->num != 14 || wcscmp(slot->data, L"Save_Settings") != 0) {
-        Log("[hdrmenu] the settings save's slot name is not \"Save_Settings\": saved %s options not kept", what);
-        return;
-    }
     int kept = 0;
     wchar_t line[96];
     for (size_t k = 0; k < count; ++k) {
@@ -725,10 +734,68 @@ void KeepSavedOptions(uint8_t* gus, const char* const* keys, size_t count, const
         s.addOrUpdate(gus, &cmd);
         ++kept;
     }
+    return kept;
+}
+
+// the slot name as the writer will use it (initialised by the exe's static constructors long before this)
+bool SlotIsSettings()
+{
+    const FStr* const slot = s.saveSlot;
+    return slot && slot->data && slot->num == 14 && wcscmp(slot->data, L"Save_Settings") == 0;
+}
+
+// Game thread: the waiting options added and the file written once, as soon as the game has written it itself.
+void KeepPendingTick()
+{
+    if (!s.keepCount) return;
+    if (!s.gameWrote.load(std::memory_order_acquire)) {
+        if (GetTickCount64() - s.keepSinceMs < kKeepGiveUpMs) return;
+        Log("[hdrmenu] the game did not write its settings save within %llu s: saved menu options not kept (nothing written)",
+            static_cast<unsigned long long>(kKeepGiveUpMs / 1000));
+        s.keepCount = 0;
+        s.keepWaiting.store(false, std::memory_order_relaxed);
+        return;
+    }
+    int kept = 0;
+    char what[96] = "";
+    for (int i = 0; i < s.keepCount; ++i) {
+        const int n = AddSavedOptions(s.keepGus, s.keepItems[i].keys, s.keepItems[i].count);
+        if (n && strlen(what) + strlen(s.keepItems[i].what) + 4 < sizeof what) {
+            if (*what) strcat_s(what, " + ");
+            strcat_s(what, s.keepItems[i].what);
+        }
+        kept += n;
+    }
+    s.keepCount = 0;
+    s.keepWaiting.store(false, std::memory_order_relaxed);
     if (!kept) return;
-    s.saveWriter(gus);
-    Log("[hdrmenu] %d saved %s option(s) put back into the saved options and the settings save written (the game drops "
-        "options of rows it does not have yet when it loads the file)", kept, what);
+    s.saveWriter(s.keepGus);
+    Log("[hdrmenu] %d saved %s option(s) put back into the saved options and the settings save written, after the game's own "
+        "write (the game drops options of rows it does not have yet when it loads the file)", kept, what);
+}
+
+void KeepSavedOptions(uint8_t* gus, const char* const* keys, size_t count, const char* what)
+{
+    if (!s.saveRead.load(std::memory_order_acquire) || s.save.empty() || !s.addOrUpdate || !s.saveWriter) return;
+    if (!SlotIsSettings()) {
+        Log("[hdrmenu] the settings save's slot name is not \"Save_Settings\": saved %s options not kept", what);
+        return;
+    }
+    bool any = false;
+    double d = 0;
+    for (size_t k = 0; k < count && !any; ++k) any = Saved(s.save, keys[k], &d);
+    if (!any) return;  // nothing to keep: nothing written
+    if (s.keepCount >= static_cast<int>(sizeof s.keepItems / sizeof *s.keepItems)) return;
+    if (s.keepGus && s.keepGus != gus) {
+        Log("[hdrmenu] another settings object than the waiting options': saved %s options not kept", what);
+        return;
+    }
+    s.keepGus = gus;
+    s.keepItems[s.keepCount++] = {keys, count, what};
+    if (!s.keepWaiting.exchange(true, std::memory_order_relaxed)) s.keepSinceMs = GetTickCount64();
+    if (!s.gameWrote.load(std::memory_order_acquire))
+        Log("[hdrmenu] saved %s options wait until the game has written its settings save itself", what);
+    KeepPendingTick();
 }
 
 // "<name> <value>" through Altar's command setter, as the menu's rows and the saved settings run them (the sinks follow)
@@ -791,20 +858,27 @@ std::string ReadSettingsSave()
 {
     using GetFolderFn = HRESULT(WINAPI*)(const GUID&, DWORD, HANDLE, PWSTR*);
     using FreeFn = void(WINAPI*)(void*);
-    static const GUID kDocuments = {0xFDD39AD0, 0x238F, 0x46AF, {0xAD, 0xB4, 0x6C, 0x85, 0x48, 0x03, 0x69, 0xC7}};  // FOLDERID_Documents
+    // The game's folder is not FOLDERID_Documents (often redirected, e.g. to OneDrive) but its UserSettingsDir, the local
+    // AppData folder (exe+0xF5FA20 in build 19115871: SHGetKnownFolderPath(FOLDERID_LocalAppData)), followed by
+    // "../../Documents/My Games/Oblivion Remastered/" (exe+0x6E3A7E0, used at exe+0xF143D2). Review fix, mishu-b 2026-10-31.
+    static const GUID kLocalAppData = {0xF1B32785, 0x6FBA, 0x4FCF, {0x9D, 0x55, 0x7B, 0x8E, 0x7F, 0x15, 0x70, 0x91}};  // FOLDERID_LocalAppData
     HMODULE shell = LoadLibraryW(L"shell32.dll");
     HMODULE ole = LoadLibraryW(L"ole32.dll");
     const auto getFolder = shell ? reinterpret_cast<GetFolderFn>(GetProcAddress(shell, "SHGetKnownFolderPath")) : nullptr;
     const auto taskFree = ole ? reinterpret_cast<FreeFn>(GetProcAddress(ole, "CoTaskMemFree")) : nullptr;
     std::wstring path;
     PWSTR docs = nullptr;
-    if (getFolder && taskFree && SUCCEEDED(getFolder(kDocuments, 0, nullptr, &docs)) && docs)
-        path = std::wstring(docs) + L"\\My Games\\Oblivion Remastered\\Saved\\SaveGames\\Save_Settings.sav";
+    if (getFolder && taskFree && SUCCEEDED(getFolder(kLocalAppData, 0, nullptr, &docs)) && docs)
+        path = std::wstring(docs) + L"\\..\\..\\Documents\\My Games\\Oblivion Remastered\\Saved\\SaveGames\\Save_Settings.sav";
     if (docs && taskFree) taskFree(docs);
     std::string data;
     if (path.empty()) return data;
+    s.savePath = path;
     const HANDLE f = CreateFileW(path.c_str(), GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, nullptr, OPEN_EXISTING, 0, nullptr);
     if (f == INVALID_HANDLE_VALUE) return data;
+    FILETIME written{};
+    if (GetFileTime(f, nullptr, nullptr, &written))
+        s.saveTime = (static_cast<uint64_t>(written.dwHighDateTime) << 32) | written.dwLowDateTime;
     LARGE_INTEGER size{};
     if (GetFileSizeEx(f, &size) && size.QuadPart > 0 && size.QuadPart < (4 << 20)) {
         data.resize(static_cast<size_t>(size.QuadPart));
@@ -905,7 +979,7 @@ void Patch(uint8_t* table, uint8_t* catTable, uint8_t* gus)
         return Disable("General has no Brightness Intensity slider as in build 19115871");
 
     // The state the rows show and the variables get: the menu's saved options when they have the entry, else the settings
-    // object and the engine's defaults. With GameUserSettings.ini read-only (as on the user's PC) the object reloads the
+    // object and the engine's defaults. With GameUserSettings.ini read-only (as some players keep it) the object reloads the
     // ini's values at every launch and never learns a menu change, so the saved options win (seen live: saved 1000 nits,
     // object 1300).
     const bool outputOn = (gus[l.hdrOn] & l.hdrOnMask) != 0;
@@ -1235,7 +1309,7 @@ constexpr wchar_t kHudName[] = L"HUD Aspect Ratio";
 constexpr wchar_t kHudDescription[] = L"Places the HUD within a 4:3, 16:9, 21:9 or 32:9 area in the middle of the screen. Wide uses the whole screen.";
 constexpr const char* kHudKey = "OPF.HudAspect";
 constexpr wchar_t kHudVar[] = L"OPF.HudAspect";
-constexpr wchar_t kHudHelp[] = L"Fork-local (OblivionPerfFix HudAspectRow): the HUD's area. 0 = Wide (the whole screen), 1 = 4:3, 2 = 16:9, 3 = 21:9, 4 = 32:9.";
+constexpr wchar_t kHudHelp[] = L"(OblivionPerfFix HudAspectRow): the HUD's area. 0 = Wide (the whole screen), 1 = 4:3, 2 = 16:9, 3 = 21:9, 4 = 32:9.";
 constexpr int kHudSteps = 5;
 // the row's steps in the order shown, and the value each runs
 constexpr const wchar_t* kHudLabels[kHudSteps] = {L"Wide", L"4:3", L"16:9", L"21:9", L"32:9"};
@@ -1441,7 +1515,7 @@ bool RegisterHudVar()
 {
     if (h.value) return true;
     if (h.registerFailed) return false;
-    void** const slot = GameConsoleManager();
+    void** const slot = HdrConsoleManager();
     void* const manager = slot ? *slot : nullptr;
     if (!manager) return false;  // not made yet: next time
     auto find = reinterpret_cast<FindCvarFn>(VTab(manager)[kCmFind / 8]);
@@ -1755,12 +1829,27 @@ bool FindHdrMenu(HdrMenuInfoOut* out)
 
 void HdrMenuMonitorTick()
 {
-    if (!s.installed || s.saveRead.load(std::memory_order_relaxed)) return;
+    if (!s.installed) return;
+    if (s.saveRead.load(std::memory_order_acquire)) {
+        // options wait for the game's own write: compare the file's last-write time with the one read (review fix)
+        if (s.keepWaiting.load(std::memory_order_relaxed) && !s.gameWrote.load(std::memory_order_relaxed) && s.saveTime) {
+            WIN32_FILE_ATTRIBUTE_DATA a{};
+            if (GetFileAttributesExW(s.savePath.c_str(), GetFileExInfoStandard, &a)) {
+                const uint64_t t = (static_cast<uint64_t>(a.ftLastWriteTime.dwHighDateTime) << 32) | a.ftLastWriteTime.dwLowDateTime;
+                if (t != s.saveTime) {
+                    s.gameWrote.store(true, std::memory_order_release);
+                    Log("[hdrmenu] the game has written its settings save: the waiting saved options are kept now");
+                }
+            }
+        }
+        return;
+    }
     // the monitor's first tick, about a second after the DLL loaded; the game loads its saved options and writes them
     // back about 20 s after the DLL loaded (probe games). Not in DllMain: shell32 under the loader lock.
     s.save = ReadSettingsSave();
     s.saveRead.store(true, std::memory_order_release);
-    Log("[hdrmenu] saved options: Save_Settings.sav %s (%zu bytes)", s.save.empty() ? "not read" : "read", s.save.size());
+    Log("[hdrmenu] saved options: Save_Settings.sav %s (%zu bytes): %ls", s.save.empty() ? "not read" : "read", s.save.size(),
+        s.savePath.empty() ? L"(no path)" : s.savePath.c_str());
 }
 
 namespace {
@@ -1784,6 +1873,29 @@ bool RayReconstructionLibrary(std::wstring* where)
 
 }  // namespace
 
+namespace {
+
+// The game registers its own int console variables through the console manager's vtable +0x18 (RegisterConsoleVariable,
+// int), as OPF.HudAspect is registered here. Checked at one known site: r.VT.MaxUploadsPerFrame.Streaming's registration
+// (lea rdx,[name]; xor r8d,r8d; mov [rsp+30h],rdi; mov dword [rsp+20h],60h; call [rax+18h]; ...), exactly once.
+constexpr wchar_t kIntRegName[] = L"r.VT.MaxUploadsPerFrame.Streaming";
+constexpr char kIntRegister[] =
+    "48 8D 15 ?? ?? ?? ?? 45 33 C0 48 89 7C 24 30 C7 44 24 20 60 00 00 00 FF 50 18 48 8D 0D ?? ?? ?? ?? 48 89 05 ?? ?? ?? ?? "
+    "48 89 0D ?? ?? ?? ??";
+
+bool IntRegistrationAsExpected()
+{
+    const GameModule& game = Game();
+    int n = 0;
+    for (uint8_t* p : FindAll(game.text, ParsePattern(kIntRegister))) {
+        const auto* const name = reinterpret_cast<const wchar_t*>(RipTarget(p, 3, 7));
+        if (game.rdata.Contains(name) && wcscmp(name, kIntRegName) == 0) ++n;
+    }
+    return n == 1;
+}
+
+}  // namespace
+
 bool InstallHdrMenu(bool hdrRows, bool rayReconstruction, bool hudAspect, bool beforeGameCode)
 {
     if (!hdrRows && !rayReconstruction && !hudAspect) return false;
@@ -1793,8 +1905,8 @@ bool InstallHdrMenu(bool hdrRows, bool rayReconstruction, bool hudAspect, bool b
         if (!pe) {
             Log("[hudaspect] UObject::ProcessEvent not found (once) by its prologue: HudAspectRow not installed");
             hudAspect = false;
-        } else if (!FindVtStreamingUploads()) {
-            Log("[hudaspect] the console manager's int registration (VtStreamingUploads' site) not as in build 19115871: HudAspectRow not installed");
+        } else if (!IntRegistrationAsExpected()) {
+            Log("[hudaspect] the console manager's int registration (r.VT.MaxUploadsPerFrame.Streaming's) not as in build 19115871: HudAspectRow not installed");
             hudAspect = false;
         } else {
             h.processEvent = reinterpret_cast<ProcessEventFn>(pe);
@@ -1841,6 +1953,7 @@ void HdrMenuFrameEnd()
     if (s.hudWanted) HudTick();
     if (s.failed) return;
     if (s.syncAt && s.frames >= s.syncAt) FinishSync();
+    if (s.keepCount) KeepPendingTick();
     const bool hdrDone = !s.hdrWanted || s.patched, rrDone = !s.rrWanted || s.rrFailed || s.rrPatched;
     const bool hudDone = !s.hudWanted || s.hudFailed || s.hudPatched;
     if (hdrDone && rrDone && hudDone) {
@@ -1906,6 +2019,7 @@ void HdrMenuFrameEnd()
     s.upTable = nullptr;
 }
 
-uint8_t* FindExecByName(const char* name, const char* shape) { return FindNativeByName(name, shape); }
+
+bool HudAspectIntRegistrationFound() { return IntRegistrationAsExpected(); }
 
 }  // namespace opf

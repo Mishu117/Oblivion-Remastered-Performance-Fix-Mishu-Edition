@@ -1,11 +1,13 @@
-// Fork-local SeparableSkinAbove4K self-test, included by selftest.cpp: the switch logic against a fake
-// r.SSS.Burley.Quality (its two copies), a fake r.ScreenPercentage and a fake window width (the console manager and the
-// game window do not exist offline).
+// SeparableSkinAbove4K self-test, included by selftest.cpp: GConsoleManager found on the mapped exe, then the switch
+// logic against a fake r.SSS.Burley.Quality (its two copies), a fake r.ScreenPercentage and a fake window width (the
+// console variables and the game window do not exist offline).
 #pragma once
 
 namespace skinsss {
-void Run()
+void Run(const GameModule& game)
 {
+    Check(reinterpret_cast<uint8_t*>(SeparableSkinConsoleManager()) == game.base + 0x9007F28,
+          "SeparableSkinAbove4K: GConsoleManager at exe+0x9007F28 (from the game's r.HDR.UI.Luminance lookups)");
     int32_t v[2] = {1, 1};
     float pct = 100.f;
     int win = 5120;

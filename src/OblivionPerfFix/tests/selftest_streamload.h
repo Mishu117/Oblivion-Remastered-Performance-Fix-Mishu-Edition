@@ -27,7 +27,7 @@ void Run(const GameModule& game)
           "viewport+0x6C");
     Check(i.setLoadingFreeze && rva(i.setLoadingFreeze) == 0x4887110,
           "UnfreezeBehindLoadingScreen: SetLoadingFreeze found (flags and calls as the unfreeze timer) at exe+0x4887110");
-    // fork-local UnfreezeBehindLoadingScreenFastTravel: the map's fast-travel request thunk, by its registered name
+    // UnfreezeBehindLoadingScreenFastTravel: the map's fast-travel request thunk, by its registered name
     uint8_t* const ft = FindExecByName("DelayFastTravelRequestUntilFadeEnd",
         "48 89 5C 24 08 48 89 74 24 18 57 48 83 EC 20 33 FF 48 8B DA 89 7C 24 38 48 8B F1 E8 ?? ?? ?? ?? 48 8B CB 48 39 7B 20 "
         "74 10 48 8B 53 18 4C 8D 44 24 38 E8 ?? ?? ?? ?? EB 1C 4C 8B 83 88 00 00 00 48 8D 54 24 38 49 8B 40 18 48 89 83 88 00 00 "

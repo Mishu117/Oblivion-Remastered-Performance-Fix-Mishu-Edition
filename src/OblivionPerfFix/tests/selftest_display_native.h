@@ -1,4 +1,4 @@
-// MonitorNativeFromWindows / FullscreenAllResolutions (fork-local) self-test, included by selftest.cpp: both sites found
+// MonitorNativeFromWindows / FullscreenAllResolutions self-test, included by selftest.cpp: both sites found
 // where build 19115871 has them, then installed in the mapped copy and the written bytes checked.
 #pragma once
 

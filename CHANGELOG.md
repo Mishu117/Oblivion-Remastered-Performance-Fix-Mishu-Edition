@@ -9,96 +9,167 @@ Downloads, checksums and build attestations: https://github.com/LTSharpe/Oblivio
 Bug fixes say whose bug it was: **game bug** = also happens without OblivionPerfFix (in the game, its engine or a
 driver library); **our bug** = caused by an earlier version of OblivionPerfFix.
 
-## 1.2.3-beta+fork.27
-Mishu117's fork: upstream 1.2.3-beta below plus these changes (not an upstream release). Measured on a Ryzen 7 9800X3D and RTX 5090.
+## 1.2.4-beta+fork.28
+Mishu's Edition, rebuilt on the original 1.2.4-beta, which now includes this fork's pull requests #33 to #36. What this
+edition adds on top:
+- **Defaults:** `HdrMenuRows`, `HudAspectRow`, `DlssRayReconstruction`, `HdrGamma22`, `HdrMenuBackground`,
+  `HdrSaveThumbnail`, `AutosaveFollowsMenu` and `FullscreenAllResolutions` are on (the original ships them off). Each
+  one's ini line says so; set it to 0 for the original's default.
+- **`OldEngineSettings`** (not in the original): the old engine's Oblivion.ini settings listed in the ini's `[OldEngine]`
+  section are set in memory, without editing the game's file (for example `bGeneralSubtitles:GamePlay=1` for NPC-to-NPC
+  chatter subtitles). Nothing is set unless listed.
+- Dropped from the fork, as the original has them or they were only for development: everything from fork.27 that is
+  now in the original, the `PixGpuCapturer` diagnostic and the `-Lab` build option.
 
-- **Removed: the `DrawBehindLoadingScreen` switch** (fork.27). It only drew the frozen world behind the loading screen,
-  which on its own did not stop your character dropping into place; `UnfreezeBehindLoadingScreen` draws the world too
-  and lets it settle. Its drawing code stays as part of `UnfreezeBehindLoadingScreen`; the log lines carry that name.
-- **Defaults** (fork.27): the fork's fixes are on by default, `SeparableSkinAbove4K`, `HdrGamma22`,
-  `HdrMenuBackground`, `HdrSaveThumbnail` and `DlssRayReconstruction` (trade-offs: they change the picture),
-  `HdrMenuRows`, `HudAspectRow`, `FullscreenAllResolutions` (menu additions), `MonitorNativeFromWindows` and
-  `AutosaveFollowsMenu` (game bugs) included. Still off: `UnfreezeBehindLoadingScreen`,
-  `VtStreamingUploads` and `FadeVtFlushSkip`, and the diagnostics. Each one's ini line turns it off (0).
-- **Faster HDR menu backgrounds** (`HdrMenuBackground`, `HdrSaveThumbnail`, fork.26): the picture's conversion runs on
-  the screenshot helpers in bands, 5.8 -> 1.3 ms when a menu opens at 5120x2160 (same picture). `HudAspectRow`'s search
-  for the HUD repeats every 10 s by the clock (it counted frames: every 3.6 s at 165 fps).
-- **No autosave stutter with HDR on** (`SaveThumbnailAsync`, fork.25): with HDR, the game read the save's picture a
-  second way that the fix did not cover, so every autosave still stopped the game for 115-175 ms at 5120x2160. That way
-  is now copied and converted off the main thread too, with the game's own conversion (same picture). Measured: no
-  frame of 25 ms or more at eight door autosaves.
-- **Loading a save gets fast travel's hold** (`UnfreezeBehindLoadingScreenFastTravel`, fork.24): a save load (Continue,
-  the Load menu, quickload) now waits as long behind the loading screen as a fast travel, so its textures are in. A load
-  is recognised by the game reading the save file; doors and gates keep `UnfreezeBehindLoadingScreen`'s value.
-- **HUD Aspect Ratio in the menu** (`HudAspectRow`, fork.23, off by default): a row after Frame Rate Limit keeps the HUD
-  inside a centred 4:3, 16:9, 21:9 or 32:9 area, or Wide (the game's, first); only the HUD moves, full-screen effects and
-  menus stay full width.
-- **Magenta specks on skin on ultrawides at DLAA / native AA** (`SeparableSkinAbove4K`, fork.23, **trade-off**, off by
-  default): a game bug in its Burley skin scattering at full resolution; while the game renders wider than 4K (more
-  than 3840 pixels) skin uses the engine's separable method, Burley again at 4K width or less.
-- **PIX GPU captures** (`PixGpuCapturer`, fork.23, diagnostic, off): loads Microsoft PIX's capture library at start-up
-  so PIX can attach to the game; changes nothing in the game.
-- **DLSS Ray Reconstruction in the menu** (`DlssRayReconstruction`, fork.22, **trade-off**, off by default): a "DLSS - Ray
-  Reconstruction" row below DLSS - Frame Generation turns on NVIDIA's AI denoiser, which the game's DLSS plugin has but
-  the game never offered. Greyed out with the other DLSS rows when DLSS is not the upscaler; saved with the other
-  settings. Needs NVIDIA's `nvngx_dlssd.dll` in the game's DLSS folder (since fork.27 the driver's downloaded model
-  alone no longer counts: never tested) and hardware ray tracing.
-- **Start-up crash in `PsoPrecompileFast`'s driver-thread check** (fork.21, **our bug**, also in upstream 1.2.2): the
-  cold-cache guard found the driver's compile threads with a Windows thread snapshot, which maps memory once for every
-  thread on the PC. The game's built-in web browser hooks that call while it starts, and a call that came in at the
-  wrong moment jumped to address 0 (2 crashes seen at start-up, the monitor thread in the crash report). The threads are
-  now listed with one `NtQuerySystemInformation` call, which maps nothing; the same threads are found.
-- **Save thumbnails in HDR** (`HdrSaveThumbnail`, fork.20, **trade-off**, off by default): in HDR a save's thumbnail
-  stores HDR values as ordinary colour, so the Load and Save menus show it grey and washed out. With 1, the picture is
-  converted the same way as `HdrMenuBackground`'s before the save stores it. Saves already made keep their thumbnail.
-- **The shader screen after a driver update** (`ShaderScreenAfterDriverChange`, fork.19, on):
-  **game bug**: the game waits for its shader building only on its very first start, so after a new graphics driver it
-  builds everything while you play. Now a changed card or driver brings back the game's own first-start shader
-  screen, at the engine's fast pace; your settings are kept, and the first start with the fix only notes the card. Test with NVIDIA's cache emptied before every start (3
-  starts without, 2 with): about 3 minutes on the screen, then in the first flight 1 hitch instead of about 40, the
-  worst frame about 50 ms instead of up to 2 s, the 1 % low about 70 instead of 60. Also found: upstream's cold-cache guard trips with a warm cache on NVIDIA when a world loads during
-  the precompile (5 of 5 launches; the precompile ends 13.6 s later); unchanged here.
-- **The "Show VRAM" counter showed 0/0** (`VramCounterFix`, fork.18, on): **game bug**: the counter reads two numbers the
-  engine never fills in, so it said "VRAM: 0/0" on every PC. When both are 0 it now shows the game's video memory use
-  and the budget Windows gives it, from the DXGI reading the DLL already makes once a second (RTX 5090: "VRAM: 7,635/31,419").
-- **No autosaves with every autosave option off** (`AutosaveFollowsMenu`, fork.16, off by default until checked in play): **game bug**: with all four autosave options in the Gameplay menu off (rest, wait, travel, entering or leaving an interior), the game still autosaved after every level-up and when a quest's script asked for a save; those two have no option in the menu (`bSaveOnLevelUp`, `bAllowScriptedAutosave`). With the key on, those two are not made while all four options are off (one `[autosave]` log line each); with any option on, the game saves as before. The other autosaves, your own saves and quicksaves are unchanged. Start-up with the version.dll route, then live.
-- **Bow sneak attacks at 1x, or hitting twice** (`BowSneakAttackFix`, fork.15, on; checked in play: 20 sneak shots, each once at 2x, "Sneak attack for 2X damage" every time): **game bug**: both of the game's engines check where the player's arrow lands; the new one applies the bow's sneak multiplier (2x or 3x), the old one's own impact always uses 1x, and whichever sees the hit first wins, so many sneak shots said "Sneak attack for 1X damage" and did 1x; when both saw the same arrow the target was hit twice (1x + 2x). Measured on the target's health with a lab probe: of 23 sneak shots, 10 did 2x, 9 did 1x and 4 hit twice. With the key on, each of the player's arrows hits once, and the old engine's hit uses the multiplier the new engine computed for the player's last arrow hit (until the first one in a session, 1x as before); each player arrow hit is logged as a `[bowsneak] hit:` line (first 200 per session; `runCheck-BowSneak.ps1` summarises them). Changes damage, back to what the game intends. Start-up with the version.dll route, then live.
-- **The menu's background in HDR as in SDR** (`HdrMenuBackground`, fork.14, **trade-off**, off by default): **game bug**: in HDR the menu's background screenshot holds the HDR signal's values (PQ), which the menu shows as ordinary colours, so it looks grey and washed out. With it on, the screenshot is converted to the brightness the world had (up to Paper White) before the menu uses it; HDR10 only, live. Measured: the HDR menu follows the SDR menu region by region within ±8 % (stock ±30 %, shadows 2.1x); 5.8 ms per 5120x2160 screenshot.
-- **Old-engine settings: the cell grid refused** (`OldEngineSettings`, fork.13): `uGridsToLoad` and `uExterior Cell Buffer` in `[OldEngine]` are ignored with a log line (they are sized when the world is made; a bigger grid crashed every launch in tests).
-- **A separate loading-screen hold for fast travel** (`UnfreezeBehindLoadingScreenFastTravel`, fork.13, **trade-off**, 0 = same as `UnfreezeBehindLoadingScreen`): after a map fast travel the world runs this long behind the loading screen instead, so more of the new area's grass is in when the picture appears; doors and gates keep their value. Measured: 3 of 3 fast travels held 1000 ms, every door and teleport 500 ms.
-- **HDR rows grey out like the game's own** (`HdrMenuRows`, fork.12): Peak Brightness, Paper White, Black Floor and Mid-Tone are greyed out while HDR is off, and Brightness Intensity (no effect in HDR) while HDR is on, switching live when HDR changes. They use the game's own HDR / SDR option row kinds, so the game does the locking.
-- **The HDR section's text and defaults** (`HdrMenuRows`, fork.11): labels without units and short descriptions; defaults HDR Off, Peak Brightness 1000, Paper White 200 (also applied at start-up when none is saved), Black Floor -4, Mid-Tone 15; your saved values are still what the rows show. Brightness Intensity keeps the game's own description.
-- **HDR shadows as on an SDR monitor** (`HdrGamma22`, fork.10, **trade-off**, off by default): the game's HDR copies its SDR picture as Windows decodes it (sRGB), so its darks look raised next to SDR on a monitor (gamma 2.2). With it on, the HDR tone curve's spline is refitted in memory so everything below a reference white (9.5 x Mid-Tone) is re-decoded as gamma 2.2; highlights, peak, black floor and the HUD unchanged; works with DLSS frame generation; live. Measured: the dark-to-mid shape now matches SDR at 2.2 (x0.62-0.72 flat, was x1.83 -> x0.68).
-- **An HDR section in the game's own Graphics menu** (`HdrMenuRows`, fork.9, off by default): between General and Quality, HDR On/Off, Peak Brightness, Paper White, Black Floor and Mid-Tone, each with a description, driving the game's own HDR settings and saved like its other options. With it on, the saved peak brightness is also what the tone mapping uses from the start (the game used 1000 nits after every launch until the value was changed), and Brightness Intensity's description notes that it does nothing in HDR.
-- **All your monitor's resolutions** (`MonitorNativeFromWindows`, `FullscreenAllResolutions`, fork.9, off by default): monitors wider than 4095 pixels whose EDID names a smaller resolution first (an AW3926QW says 3440x1440) get their real native resolution from Windows, and the fullscreen list can show every mode Windows offers instead of only the native aspect ratio.
+## 1.2.4-beta
+For Oblivion Remastered, Steam build 19115871 (Game Pass experimental). Thanks to Mishu117 for pull requests #33, #34,
+#35 and #36, to mkusm for pull request #31, to solir2 for the ROG Ally report, and to everyone who reported results and
+problems. Numbers marked "ours" are from our test PC (Ryzen 7 5800X, RX 9070 XT); the contributors' own measurements are
+in their pull requests.
 
-- **NPC-to-NPC subtitles, and other old-engine settings without editing the game's files** (`OldEngineSettings`, fork.8): settings listed in OblivionPerfFix.ini's `[OldEngine]` section (for example `bGeneralSubtitles:GamePlay=1`, which the remaster's subtitle option does not set) are set in memory; the game's Oblivion.ini stays as it was (checked after quitting). Nothing is set unless listed.
-- **The world appears sooner after a door, a city gate or a fast travel** (`StreamBehindLoadingScreen`): during a
-  transition the game empties its texture memory, and once the new area has loaded it held the last loading-screen
-  image until that area's textures were streamed back in. They now stream in while the loading screen is still idling,
-  so that wait is over in about 10 ms instead of 0.1-0.3 s. Cheydinhal inn at 5120x2160: last image held before the
-  world appears 539 -> 230 ms stepping out, 225 -> 75 ms stepping in; the loading screen is not longer, video memory
-  peak and the first picture are the same. City gate and fast travel: 420-437 -> 166-213 ms and 327-421 -> 113-160 ms.
-- **Removed with the merge of upstream 1.2.3** (fork.27): `PacingFadeUnseen` (far characters still hidden in their
-  fade-in counted as unseen; upstream 1.2.3's `PacingFadeAware` does the same), `PacingResolvePerLevel` (far
-  characters' clothing resolved to the character; within noise since upstream 1.2.1, and upstream rewrote the code it
-  patched) and the diagnostics `PacingUnitLog` and `FadeHoldTest`.
-- **New switch, off by default:** `FadeVtFlushSkip` stops the blur flash right as you arrive through a door, a city gate
-  or a fast travel: 1.5 s into the fade-in the game empties its whole streamed-texture cache (`r.VT.Flush`), so walls and
-  roofs that had already loaded go blurry and reload in view. With the switch on that flush is skipped; in tests the
-  picture a few seconds later was the same either way.
-- **New switch, off by default:** `VtStreamingUploads` lets walls, roofs and stairs reach full detail sooner after
-  stepping outdoors: the streamed ("virtual") textures upload N pages per frame instead of the game's 4. At the
-  Imperial City Waterfront lighthouse exit (5120x2160) the stair walls are fully detailed as the fade-in completes with
-  64, instead of about 8 s later. No Engine.ini line can set this value; the fix does.
-- **New trade-off switch, off by default:** `UnfreezeBehindLoadingScreen` makes exits, city gates and fast travel work
-  like entering an interior: the world is unfrozen and drawn behind the loading screen for N ms (e.g. 1000) before the
-  fade-in, so your character already stands normally and the scene has settled when the picture comes in. The loading
-  screen is about 1 s longer with 1000, and the world runs that long unseen (as it already does after entries).
-  `DrawBehindLoadingScreen` (off) only draws the frozen world behind the loading screen (removed in fork.27: on its own
-  it was not enough, and `UnfreezeBehindLoadingScreen` does what it did and more).
-- **New diagnostic** `DoorDiag` (off): per transition, the loading-screen timeline, each texture stream-all's wait and
-  render-target pool misses, in the log.
+- **The ini now has three parts** (`OblivionPerfFix.ini`): **performance improvements** (the game's own work done in a
+  cheaper way; all on), **game bug fixes** (the game does what it was meant to; on, except `AutosaveFollowsMenu` and
+  `FullscreenAllResolutions`, which say why they are off; set any of them to 0 to stay closer to the stock game; the
+  crash and freeze guards moved here, with a note to leave them on) and **optional tweaks** (they may change the look or
+  how the game plays; all off). Then the diagnostics and `[General]`, as before. Every key keeps its name, value and
+  text, and all of them are still read from `[Fixes]`: an ini from an earlier version still works (new keys then have
+  their defaults).
+
+### Performance improvements
+- **New: fewer hitches where robed characters appear in the distance** (`ClothBuildDefer`, on; a timing change of
+  `NpcCreationPacing`'s kind, not a bug fix; pull request #31 by mkusm, thank you): a far-away character you cannot see
+  built its robe's or cape's cloth simulation in the middle of its creation, often two or three times. That first build
+  now waits a few frames and the repeated requests become one build; it is made at once when the character comes near
+  or into view, and after at most 60 frames. Right after that build the robe's bounding box is computed from the new
+  cloth and handed to the renderer, as the game does when the robe is put on (without it the robe kept an empty box,
+  which the renderer uses for shadows; our addition, which mkusm asked for). The build comes at the latest in the frame
+  after the character is first drawn (1-2 frames, like `NpcCreationPacing`'s own steps, mostly inside the spawn
+  fade-in). Peryite's Shrine, where five robed worshippers appear (ours): the NPC work in those creation frames 181 ->
+  110 ms, frames over 25 ms there 1-2 -> 0-1. Installed at start-up with the version.dll route; needs
+  `NpcCreationPacing`. New key `ClothBuildDefer` (1; 0 = off).
+- **The world appears sooner after a door, a city gate or a fast travel** (`StreamBehindLoadingScreen`, on; pull
+  request #34 by Mishu117, thank you): during a transition the game empties its texture memory, and once the new area
+  has loaded it held the last loading-screen image until that area's textures were streamed back in. They now stream
+  in while the loading screen is still idling (the same pool size set back with the same call, earlier, and the
+  streaming update the game's own wait runs first), so that wait is mostly over when the loading screen ends. The game's
+  own wait still runs, so the first picture is the fully textured one (a texture not drawn for half a second gets no mip
+  fade in the engine, so textures streamed earlier come in as the game's own wait brings them), and the world does not
+  run longer than before. His measurements: pull request #34. Ours (our PC, small profile (854x480), Cheydinhal inn
+  door, switched live A B B A A B: the fade-in's texture wait 0.3-1.9 ms with it against 99-710 ms without; the
+  loading screen a little shorter at every transition (arriving outside 6325 -> 5977 ms, entering the inn 89 ms
+  shorter, leaving it 4402 -> 3949 ms); hitch time after the exit -29 %; the end pictures within the run-to-run
+  difference of two runs without it; 2.1-2.7 ms more main-thread work per loading-screen frame, behind the loading
+  screen). New key `StreamBehindLoadingScreen` (1). Our
+  review change: the hooks only the optional `UnfreezeBehindLoadingScreen` needs are installed only when it is on.
+- **HDR autosaves: the long frame taken off the main thread** (`SaveThumbnailAsync`; pull request #33 by Mishu117, thank
+  you): with HDR output
+  the game reads the save's picture a second way (as high-precision colour, then converted on the main thread), which
+  the takeover did not cover, so every autosave in HDR still stopped the game's main thread. That read is now copied and
+  converted off the main thread too, with tables built from the game's own conversion (the self-test runs the game's
+  converter and quantiser on every 10-bit value and 8,192 random pixels: identical). The gain in HDR is his
+  measurement (pull request #33): our benchmark game runs hidden in SDR, where we checked that nothing changes.
+- **`ClothConfigCache`: a cheaper identical check.** The byte-for-byte comparison is unchanged; the data it reads is now
+  fetched ahead in one pass instead of one cache miss after another, so the check takes about 28 % less time (ours;
+  what is skipped is exactly what was skipped before).
+- **Changed: less memory kept on handhelds and PCs with integrated graphics** (`SharedMemoryGpu`, 2; after a report of
+  hard freezes on a ROG Ally by solir2, thank you; **whose bug that freeze is, ours or also the game's, is not known
+  yet**): on graphics without memory of their own (integrated graphics, APUs, handhelds such as the ROG Ally, Legion Go
+  or Steam Deck) the graphics use the PC's RAM, and several of our fixes keep memory on purpose to avoid re-allocation
+  stutter (upload memory, spare buffer and list capacity: a few hundred MB, up to about 0.5 GB). On a 16 GB handheld,
+  where the game already uses nearly all of the RAM, that memory is missing for the game and Windows, and our memory
+  safety net looked at video memory, which on such a PC does not show RAM running out. The DLL now asks the game's
+  graphics at start-up whether they use system RAM; if so, and the PC runs Windows itself (not Proton, CrossOver or Wine:
+  Steam Deck and Mac players are unaffected, nothing changes there) with less than 20 GB of RAM (16 GB handhelds such
+  as the ROG Ally, Legion Go or MSI Claw; the 24 GB ROG Xbox Ally X, where players report the fixes working well, and
+  PCs with 20 GB or more keep everything; `SharedMemoryGpu=1` turns it on there, for example if a 24 GB handheld
+  freezes), `UploadMemoryKeep`, `LumenKeepArrayCapacity`, `GpuSceneKeepCapacity`,
+  `RtSceneBufferKeep` and `OsPageCache` behave as the game does, the automatic `RdgParallelTranslate` stays off, and
+  `CommandAllocatorTrim` hands spare command memory back after every load (less than the game keeps). The log says what
+  was found and why (`[mem] the game's GPU memory: ... UMA yes, Wine no, RAM 16.0 GB installed: SharedMemoryGpu=2
+  (automatic) applies`). Nothing you see changes; on such PCs the travel stutter those fixes remove comes back, the
+  other fixes stay. New key `SharedMemoryGpu` (2 = automatic; 1 = always; 0 = never, as on a graphics card with its own
+  memory). Not tested on a handheld yet.
+
+### Game bug fixes
+- **Our bug fixed: a rare start-up crash in `PsoPrecompileFast`'s driver-thread check** (our bug since 1.2.0-beta, both
+  the version.dll and the OBSE64 route; found and fixed in pull request #33 by Mishu117): the cold-cache guard found the
+  driver's compile threads with a Windows thread snapshot, which maps memory once for every thread on the PC. The game's
+  built-in web browser (CEF) hooks that call while it starts, and a call at the wrong moment jumped to address 0 (the
+  monitor thread in the crash report). The OBSE64 route's look-up of the game's main thread used the same kind of
+  snapshot (since 1.0.0-beta, before the game's code starts). Both now list the threads with one
+  `NtQuerySystemInformation` call, which maps nothing; the same threads are found. This may also explain some start-up
+  failures reported since 1.2.0, on both routes.
+- **Game bug fixed: the shader screen after a driver update** (`ShaderScreenAfterDriverChange`, on; pull request #33 by
+  Mishu117): the game waits for its shader building only on its very first start, so after a new graphics driver it
+  builds everything while you play. Now a changed card or driver brings back the game's own first-start shader screen,
+  at the engine's fast pace (a few minutes once, after a driver update); your settings are kept, and the first start
+  with the fix only notes the card. His measurements: pull request #33. New key `ShaderScreenAfterDriverChange` (1). It
+  notes the card in a new small file, `OblivionPerfFix-gpu.txt`, next to the DLL. Our review change: the card is also
+  recorded when the main menu is reached with no precompile running. version.dll route only. Good to know (stock
+  behaviour, with or without the fix): after a graphics driver update the first game session also rebuilds the
+  driver's own shader cache, so expect higher CPU and memory use and lower fps for its first minutes; once you restart
+  the game, sessions run as before.
+- **Game bug fixed: "Show VRAM" showed 0/0** (`VramCounterFix`, on; pull request #33 by Mishu117): the counter reads two
+  numbers the engine never fills in, so it said "VRAM: 0/0" on every PC. When both are 0 it now shows the game's video
+  memory use and the budget Windows gives it, from the DXGI reading the DLL already makes once a second. New key
+  `VramCounterFix` (1).
+- **Game bug fixed: the real resolution of wide monitors** (`MonitorNativeFromWindows`, on; pull request #35 by
+  Mishu117, thank you): monitors wider than 4095 pixels can name a smaller resolution first in their EDID (an Alienware
+  AW3926QW says 3440x1440 for its 5120x2160), and the game took that as native: borderless showed it, and fullscreen
+  listed only resolutions of exactly its shape. The native resolution now comes from Windows' preferred mode. New key
+  `MonitorNativeFromWindows` (1). Start-up only.
+- **New, off: every fullscreen resolution** (`FullscreenAllResolutions`, **0**; pull request #35): the fullscreen list
+  shows every mode Windows offers (other shapes, and modes above native such as DSR/VSR). Off by default because
+  `MonitorNativeFromWindows` already fixes the wide-monitor bug; this only adds choices. Start-up only.
+- **Game bug fixed: bow sneak attacks at 1x** (`BowSneakAttackFix`, on; pull request #35 by Mishu117): both engines check
+  where a player's arrow lands; the new one uses the bow's sneak multiplier, the old one always 1x, and whichever sees
+  the hit first wins (sometimes both: the target is hit twice). With 1 each arrow hits once, with the sneak multiplier.
+  It changes damage, back to what the game intends; 0 = the game's behaviour. New key `BowSneakAttackFix` (1).
+- **Game bug fixed: magenta specks on skin** (`SeparableSkinAbove4K`, on; pull request #35 by Mishu117): with Effects
+  Quality Ultra and a render wider than 3840 pixels (an ultrawide at DLAA or FSR Native AA), sunlit skin and cloth edges
+  show glowing magenta specks (a game bug, also without this DLL). With 1 skin scattering uses the engine's separable
+  method (`r.SSS.Burley.Quality 0`) while the render is that wide, which shades skin a little differently; at 3840 or
+  less nothing changes. New key `SeparableSkinAbove4K` (1). Live.
+- **New, off: autosaves that follow the menu** (`AutosaveFollowsMenu`, **0**; pull request #35 by Mishu117): with all four
+  autosave options of the Gameplay menu off, the game still autosaves after every level-up and when a quest's script
+  asks for a save, two autosaves the menu has no option for. With 1 they follow the menu too. Off by default because it
+  also takes away those two automatic saves, which you may want to go back to.
+
+### Optional tweaks (all off by default)
+Switches that may change the look or how the game plays, on purpose: not speed-ups and not game-bug fixes; switch one on
+only if you want its change. From pull requests #34 and #36 by Mishu117, thank you:
+- `UnfreezeBehindLoadingScreen` (+ `UnfreezeBehindLoadingScreenFastTravel`): exits, city gates and fast travel work
+  like entering an interior: the world is unfrozen and drawn behind the loading screen for N ms (e.g. 500-1000) before
+  the fade-in, so your character already stands normally when the picture comes in. The loading screen is that much
+  longer and the world runs that long unseen. Takes a restart to switch on.
+- `FadeVtFlushSkip`: 1.5 s into every fade-in the game empties its streamed ("virtual") texture cache (`r.VT.Flush`),
+  so walls and roofs go blurry and reload in view; with 1 that flush is skipped. Why the game flushes is not known.
+- `VtStreamingUploads`: streamed ("virtual") texture pages uploaded per frame (the game's 4); e.g. 64 makes walls
+  reach full detail sooner after stepping outdoors, for more upload work per frame.
+- `HdrGamma22`: in HDR the tone curve is refitted so darks and mid-tones match the SDR picture on a monitor
+  (gamma 2.2); nothing changes in SDR.
+- `HdrMenuBackground`, `HdrSaveThumbnail`: in HDR10 the menu's background and a save's thumbnail hold PQ values that
+  the UI shows as colour (grey, washed out); with 1 they are converted to the brightness the world had. Take a restart
+  to switch on.
+- `HdrMenuRows`: an HDR section on the PC Graphics page (HDR, Peak Brightness, Paper White, Black Floor, Mid-Tone),
+  made from the game's own rows and saved like them; with HDR on the saved peak brightness is also used from the start
+  (the game used 1000 nits after every launch until the value was changed). Our review changes: the settings save is
+  found where the game keeps it (also when Documents is redirected, e.g. to OneDrive), and it is written only after the
+  game has written it itself.
+- `HudAspectRow`: a "HUD Aspect Ratio" row (Wide, 4:3, 16:9, 21:9, 32:9) that keeps the HUD in a centred area on wide
+  screens.
+- `DlssRayReconstruction`: a "DLSS - Ray Reconstruction" row (a ray-tracing denoiser mode the game's DLSS plugin has but
+  never offers); NVIDIA only, needs nvngx_dlssd.dll (not included).
+
+### Other
+- **New diagnostic** `DoorDiag` (off, not in the shipped ini; pull request #34): per transition, the loading-screen
+  timeline, each texture stream-all's wait and render-target pool misses, in the log.
+- Version 1.2.4 in the DLL's version resource and the OBSE64 plugin version.
+- **Benchmark (our bug in the benchmark, not in the fix):** after a graphics driver update the benchmark's first game start
+  shows the game's shader screen (`ShaderScreenAfterDriverChange`), and the runner took the still start-up for a hang
+  and restarted the game. It now waits for the screen (at most 6 minutes from the launch), and the in-game mod starts
+  its per-frame driver once the screen is gone; after a fresh start the runner also waits (up to 90 s) until that
+  driver runs before the first scene, and its watchdog notes now appear in the run output and `result.json`.
 
 ## 1.2.3-beta
 For Oblivion Remastered, Steam build 19115871 (Game Pass experimental). Thanks to MitochondriaOverlords for issue #5,

@@ -1,4 +1,4 @@
-// HdrMenuBackground (fork-local, trade-off) self-test, included by selftest.cpp: the handler's call site and the console
+// HdrMenuBackground (trade-off) self-test, included by selftest.cpp: the handler's call site and the console
 // manager on the mapped exe, the PQ -> sRGB table, and the wrapper with a fake ImageResize and fake console variables
 // (HDR10 converts, SDR / scRGB / off pass through).
 #pragma once

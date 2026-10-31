@@ -38,9 +38,19 @@ Config LoadConfig(const wchar_t* iniPath)
     c.frameGenCameraInfo = get(L"Fixes", L"FrameGenCameraInfo", c.frameGenCameraInfo) != 0;
     c.frameGenPacingTuning = get(L"Fixes", L"FrameGenPacingTuning", c.frameGenPacingTuning);
     c.displayModeCache = get(L"Fixes", L"DisplayModeCache", c.displayModeCache) != 0;
+    c.monitorNativeFromWindows = get(L"Fixes", L"MonitorNativeFromWindows", c.monitorNativeFromWindows) != 0;
+    c.fullscreenAllResolutions = get(L"Fixes", L"FullscreenAllResolutions", c.fullscreenAllResolutions) != 0;
+    c.separableSkinAbove4K = get(L"Fixes", L"SeparableSkinAbove4K", c.separableSkinAbove4K) != 0;
     c.screenshotFilterFast = get(L"Fixes", L"MenuScreenshotFilter", c.screenshotFilterFast) != 0;
     c.screenshotReadbackConvert = get(L"Fixes", L"ScreenshotReadbackConvert", c.screenshotReadbackConvert);
     c.screenshotParallel = get(L"Fixes", L"ScreenshotParallel", c.screenshotParallel);
+    c.hdrMenuRows = get(L"Fixes", L"HdrMenuRows", c.hdrMenuRows) != 0;
+    c.dlssRayReconstruction = get(L"Fixes", L"DlssRayReconstruction", c.dlssRayReconstruction) != 0;
+    c.hudAspectRow = get(L"Fixes", L"HudAspectRow", c.hudAspectRow) != 0;
+    c.hdrGamma22 = get(L"Fixes", L"HdrGamma22", c.hdrGamma22) != 0;
+    c.hdrGamma22White = get(L"Fixes", L"HdrGamma22White", c.hdrGamma22White);
+    c.hdrMenuBackground = get(L"Fixes", L"HdrMenuBackground", c.hdrMenuBackground) != 0;
+    c.hdrSaveThumbnail = get(L"Fixes", L"HdrSaveThumbnail", c.hdrSaveThumbnail) != 0;
     c.restoreFsrAfterAltTab = get(L"Fixes", L"RestoreFsrAfterAltTab", c.restoreFsrAfterAltTab) != 0;
     c.lumenKeepArrayCapacity = get(L"Fixes", L"LumenKeepArrayCapacity", c.lumenKeepArrayCapacity) != 0;
     c.uploadMemoryKeep = get(L"Fixes", L"UploadMemoryKeep", c.uploadMemoryKeep) != 0;
@@ -99,6 +109,8 @@ Config LoadConfig(const wchar_t* iniPath)
     if (c.taskWaitDeadlockGuard) c.taskWaitDeadlockGuard = 1;          // lab 2 (measure only) reads as on
     if (c.psoCompileThreadPool < -1) c.psoCompileThreadPool = -1;      // 0 the game's, N threads, -1 automatic
     c.menuOpenFlashFix = get(L"Fixes", L"MenuOpenFlashFix", c.menuOpenFlashFix) != 0;
+    c.vramCounterFix = get(L"Fixes", L"VramCounterFix", c.vramCounterFix) != 0;
+    c.shaderScreenAfterDriverChange = get(L"Fixes", L"ShaderScreenAfterDriverChange", c.shaderScreenAfterDriverChange) != 0;
     c.physAnimNoEmptyLock = get(L"Fixes", L"PhysAnimNoEmptyLock", c.physAnimNoEmptyLock) != 0;
     c.rigTraceReuse = get(L"Fixes", L"RigTraceReuse", c.rigTraceReuse);
     if (c.rigTraceReuse < 0 || c.rigTraceReuse > 2) c.rigTraceReuse = 1;  // 0 off, 1 on, 2 verify; anything else = on
@@ -117,33 +129,22 @@ Config LoadConfig(const wchar_t* iniPath)
     c.physicsPushThreads = get(L"Fixes", L"PhysicsPushThreads", c.physicsPushThreads);
     c.pipelinedBodyCreation = get(L"Fixes", L"PipelinedBodyCreation", c.pipelinedBodyCreation) != 0;
     c.gpuSceneParallelUpload = get(L"Fixes", L"GpuSceneParallelUpload", c.gpuSceneParallelUpload) != 0;
-    c.vtStreamingUploads = get(L"Fixes", L"VtStreamingUploads", c.vtStreamingUploads);
-    c.separableSkinAbove4K = get(L"Fixes", L"SeparableSkinAbove4K", c.separableSkinAbove4K) != 0;
     c.hitchLedger = get(L"Fixes", L"HitchLedger", c.hitchLedger) != 0;
     c.hitchLedgerMs = get(L"Fixes", L"HitchLedgerMs", c.hitchLedgerMs);
+    c.hitchLedgerTickSplit = get(L"Fixes", L"HitchLedgerTickSplit", c.hitchLedgerTickSplit) != 0;
+    c.vtStreamingUploads = get(L"Fixes", L"VtStreamingUploads", c.vtStreamingUploads);
     c.doorDiag = get(L"Fixes", L"DoorDiag", c.doorDiag) != 0;
     c.doorDiagEarlyStream = get(L"Fixes", L"DoorDiagEarlyStream", c.doorDiagEarlyStream) != 0;
-    c.pixGpuCapturer = get(L"Fixes", L"PixGpuCapturer", c.pixGpuCapturer) != 0;
     c.fadeVtFlushSkip = get(L"Fixes", L"FadeVtFlushSkip", c.fadeVtFlushSkip) != 0;
-    c.hdrMenuRows = get(L"Fixes", L"HdrMenuRows", c.hdrMenuRows) != 0;
-    c.dlssRayReconstruction = get(L"Fixes", L"DlssRayReconstruction", c.dlssRayReconstruction) != 0;
-    c.hudAspectRow = get(L"Fixes", L"HudAspectRow", c.hudAspectRow) != 0;
-    c.monitorNativeFromWindows = get(L"Fixes", L"MonitorNativeFromWindows", c.monitorNativeFromWindows) != 0;
-    c.hdrGamma22 = get(L"Fixes", L"HdrGamma22", c.hdrGamma22) != 0;
-    c.hdrGamma22White = get(L"Fixes", L"HdrGamma22White", c.hdrGamma22White);
-    c.hdrMenuBackground = get(L"Fixes", L"HdrMenuBackground", c.hdrMenuBackground) != 0;
-    c.hdrSaveThumbnail = get(L"Fixes", L"HdrSaveThumbnail", c.hdrSaveThumbnail) != 0;
-    c.vramCounterFix = get(L"Fixes", L"VramCounterFix", c.vramCounterFix) != 0;
-    c.shaderScreenAfterDriverChange = get(L"Fixes", L"ShaderScreenAfterDriverChange", c.shaderScreenAfterDriverChange) != 0;
-    c.fullscreenAllResolutions = get(L"Fixes", L"FullscreenAllResolutions", c.fullscreenAllResolutions) != 0;
     c.streamBehindLoading = get(L"Fixes", L"StreamBehindLoadingScreen", c.streamBehindLoading) != 0;
     c.unfreezeBehindLoading = get(L"Fixes", L"UnfreezeBehindLoadingScreen", c.unfreezeBehindLoading);
     c.unfreezeBehindLoadingFastTravel = get(L"Fixes", L"UnfreezeBehindLoadingScreenFastTravel", c.unfreezeBehindLoadingFastTravel);
-    c.hitchLedgerTickSplit = get(L"Fixes", L"HitchLedgerTickSplit", c.hitchLedgerTickSplit) != 0;
     c.npcCreationPacing = get(L"Fixes", L"NpcCreationPacing", c.npcCreationPacing) != 0;
     c.pacingBudgetMs = get(L"Fixes", L"PacingBudgetMs", c.pacingBudgetMs);
     c.pacingMinDistance = get(L"Fixes", L"PacingMinDistance", c.pacingMinDistance);
     c.pacingMaxLagFrames = get(L"Fixes", L"PacingMaxLagFrames", c.pacingMaxLagFrames);
+    c.clothBuildDefer = get(L"Fixes", L"ClothBuildDefer", c.clothBuildDefer) != 0;
+    c.clothDeferQuietFrames = get(L"Fixes", L"ClothDeferQuietFrames", c.clothDeferQuietFrames);
     c.pacingUseSlack = get(L"Fixes", L"PacingUseSlack", c.pacingUseSlack) != 0;
     c.pacingFlowWait = get(L"Fixes", L"PacingFlowWait", c.pacingFlowWait) != 0;
     c.pacingFlowWaitFrames = get(L"Fixes", L"PacingFlowWaitFrames", c.pacingFlowWaitFrames);
@@ -153,6 +154,7 @@ Config LoadConfig(const wchar_t* iniPath)
     c.memoryRelief = get(L"Fixes", L"MemoryRelief", c.memoryRelief) != 0;
     c.memoryReliefRamMB = get(L"Fixes", L"MemoryReliefRamMB", c.memoryReliefRamMB);
     c.memoryReliefCommitMB = get(L"Fixes", L"MemoryReliefCommitMB", c.memoryReliefCommitMB);
+    c.sharedMemoryGpu = get(L"Fixes", L"SharedMemoryGpu", c.sharedMemoryGpu);
     c.vramRelief = get(L"Fixes", L"VramRelief", c.vramRelief) != 0;
     c.vramReliefPauseTranslate = get(L"Fixes", L"VramReliefPauseTranslate", c.vramReliefPauseTranslate) != 0;
     c.navmeshBuildNoBusyWait = get(L"Fixes", L"NavmeshBuildNoBusyWait", c.navmeshBuildNoBusyWait) != 0;

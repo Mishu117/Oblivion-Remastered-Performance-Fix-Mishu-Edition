@@ -1,11 +1,11 @@
-// VtStreamingUploads (fork-local, off by default): more streamed virtual texture pages uploaded per frame.
+// VtStreamingUploads (off by default): more streamed virtual texture pages uploaded per frame.
 //
 // After stepping outdoors the view is new: the surfaces of the area (walls, roofs, stairs) use streaming virtual
 // textures, whose pages are read from disk and uploaded to the graphics card as the frames ask for them. The number of
 // streamed pages uploaded per frame is capped by r.VT.MaxUploadsPerFrame.Streaming, 4 in this game. At the Imperial
 // City Waterfront lighthouse exit (5120x2160) the stair walls ~40 m away come in blotchy, without mortar lines, and
 // reach full detail about 8 s after the fade-in; with the cap at 64 (set from the console) they are final as the fade
-// completes (reproduced from the user's quicksave; 2 + 2 runs).
+// completes (docs/research.md, VtStreamingUploads; 2 + 2 runs).
 //
 // The variable is registered in code with default 0 and flags RenderThreadSafe | Scalability (exe+0xA69B5B, build
 // 19115871); the 4 comes from the game's scalability settings, applied after every ini layer, so no ini line can set it
@@ -18,7 +18,7 @@
 //
 // What changes: only how many already-requested pages are uploaded in one frame (the same pages, sooner). The settled
 // picture is the same; detail arrives sooner after a door and during travel. The cost is more upload work per frame,
-// measured on flights before use. Fork-local; default 0 = the game's value.
+// measured on flights (docs/research.md). Default 0 = the game's value.
 #include "common.h"
 
 #include <cstring>

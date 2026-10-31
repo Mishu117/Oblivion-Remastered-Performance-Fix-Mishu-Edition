@@ -1,4 +1,4 @@
-// HdrGamma22 (fork-local, trade-off) self-test, included by selftest.cpp: the tone curve's block and its builder are found
+// HdrGamma22 (trade-off) self-test, included by selftest.cpp: the tone curve's block and its builder are found
 // where build 19115871 has them, and the fit gives the measured quality on a block read from the running game (Mid-Tone
 // 15, peak 1300, black floor -4; 2026-10-27).
 #pragma once

@@ -1411,34 +1411,6 @@ function V.cvar(rest)
 end
 function V.get(rest) return rest .. "=" .. tostring(Cvar(rest)) end
 
--- fork-local: "prop <Class> <Property> [value]": every object of that class (the default object included) with the
--- property's value; with a value, also sets it on each and reads it back
-function V.prop(rest)
-    local cls, name, value = rest:match("^(%S+)%s+(%S+)%s*(%S*)$")
-    if not cls then error("usage: prop <Class> <Property> [value]") end
-    local out = {}
-    local objs = FindAllOf(cls) or {}
-    -- settings classes are read through their default object, which FindAllOf skips
-    for _, pkg in ipairs({ "/Script/Altar", "/Script/Engine" }) do
-        local cdo = StaticFindObject(pkg .. ".Default__" .. cls)
-        if cdo and cdo:IsValid() then objs[#objs + 1] = cdo end
-    end
-    for _, o in ipairs(objs) do
-        if o:IsValid() then
-            local ok, v = pcall(function() return o[name] end)
-            local line = o:GetFullName() .. " " .. name .. "=" .. (ok and tostring(v) or "?")
-            if value ~= "" and ok then
-                local okSet = pcall(function() o[name] = tonumber(value) or value end)
-                local ok2, v2 = pcall(function() return o[name] end)
-                line = line .. (okSet and (" -> " .. tostring(ok2 and v2 or "?")) or " (set failed)")
-            end
-            out[#out + 1] = line
-        end
-    end
-    if #out == 0 then return cls .. ": no objects" end
-    return table.concat(out, " | ")
-end
-
 -- "ismcensus [class]" (hitchtracy 2026-10-26, read-only, no hooks): the loaded instanced static mesh components of a class
 -- (default FoliageInstancedStaticMeshComponent) grouped by collision set-up: collision enabled (0 none, 1 query, 2 physics,
 -- 3 both), profile, responses to Visibility (0), Camera (1), Pawn (3) (0 ignore, 1 overlap, 2 block); components and

@@ -33,7 +33,7 @@
 // result. The picture's buffer is allocated before the readback is mapped (retried until Windows gives it); a readback
 // that cannot be mapped (never seen) delivers a black picture of the same size, so the save always completes.
 //
-// The HDR route (fork-local): when the viewport is HDR (FViewport vtable +0x40), ProcessScreenShots reads the screenshot
+// The HDR route: when the viewport is HDR (FViewport vtable +0x40), ProcessScreenShots reads the screenshot
 // with GetViewportScreenShotHDR (exe+0x37E4FB0) instead: FRenderTarget::ReadLinearColorPixels (exe+0x37F32F0), the same
 // render command with its own lambda (exe+0x37D2B50, GDynamicRHI->RHIReadSurfaceData for FLinearColor, vtable +0x240),
 // into a TArray<FLinearColor> (16 bytes a pixel, 177 MB at 5120x2160). For the delegate it then converts each pixel on the

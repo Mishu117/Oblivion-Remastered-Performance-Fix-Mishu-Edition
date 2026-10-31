@@ -1,4 +1,4 @@
-// HdrMenuBackground (fork-local, TRADE-OFF, off by default): the player menu's background in HDR with the depth it has in
+// HdrMenuBackground (TRADE-OFF, off by default): the player menu's background in HDR with the depth it has in
 // SDR, not washed out.
 //
 // The player menu (inventory, map, System, ...) draws the world behind it from a screenshot: Altar's OnScreenshotCaptured
@@ -10,7 +10,7 @@
 // handler gets are the PQ value sRGB-encoded (a dump of them against a capture of the same view: byte 112 / 128 / 184 =
 // 1.65 / 3.5 / 80 nits = sRGB(PQ(nits)) within 1-2 codes), so the UI shows the PQ value itself as the colour: 3.5 nits
 // of world at 22 % of the UI's white, shadows raised many times, highlights pulled down, the whole background a flat
-// grey (docs/research.md, "The menu's background in HDR").
+// grey.
 //
 // The fix redirects the handler's one call of ImageResize (TArray version, exe+0x32548C0) to a wrapper that calls it
 // and then, while the switch is on and the output is HDR10, maps each colour byte of the result through a 256-entry
@@ -208,9 +208,9 @@ bool RedirectRel32(uint8_t* site, uint8_t* stub, bool beforeGameCode)
 
 }  // namespace
 
-// &GConsoleManager for other fork code (SeparableSkinAbove4K): found once from the game's lookup above; null when not
+// &GConsoleManager for HdrMenuRows' HudAspectRow (hdr_menu.cpp): found once from the game's lookup above; null when not
 // found. Monitor thread.
-void** GameConsoleManager()
+void** HdrConsoleManager()
 {
     static void** manager = nullptr;
     static bool searched = false;

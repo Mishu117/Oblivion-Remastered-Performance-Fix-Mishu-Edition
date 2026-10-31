@@ -1,10 +1,10 @@
-// MonitorNativeFromWindows and FullscreenAllResolutions (fork-local, 2026-10-27, off in the shipped ini): the Graphics
+// MonitorNativeFromWindows and FullscreenAllResolutions (game bug; MonitorNativeFromWindows on, FullscreenAllResolutions off by default): the Graphics
 // page's Display Resolution list for monitors whose EDID does not hold their real native resolution, and a fullscreen
 // list with every mode Windows offers.
 //
 // The engine reads each monitor's native resolution from its EDID's first detailed timing (GetMonitorsInfo, exe+0x1172DB0,
 // parses the registry EDID). A detailed timing cannot hold a width above 4095, so monitors wider than that put a smaller
-// timing there and the real one in an extension block. On the user's Alienware AW3926QW (5120x2160) the first timing
+// timing there and the real one in an extension block. On an Alienware AW3926QW (5120x2160) the first timing
 // is 3440x1440 (registry EDID, read 2026-10-27), and the engine takes 3440x1440 as native. The game then lists, from that
 // value (FUN exe+0x31AB020, called by the page's resolution list exe+0x48EFAC0):
 // - borderless: only the native value (the window itself still covers the desktop: 5120x2160 measured);
@@ -21,9 +21,10 @@
 // before its own size limit. Other aspect ratios are then shown by the display or the graphics driver's scaling.
 //
 // What changes: the resolution lists and the borderless value the Graphics page shows (and so what the player can pick).
-// Nothing else. Each start-up only (version.dll route), off in the shipped ini.
+// Nothing else. Installed at start-up only, on in the shipped ini.
 #include "common.h"
 
+#include <atomic>
 #include <cstring>
 
 namespace opf {
@@ -59,7 +60,8 @@ GetMonitorsInfoFn g_getMonitorsInfo = nullptr;
 uint8_t* g_callSite = nullptr;
 uint8_t* g_filter = nullptr;
 bool g_nativeInstalled = false, g_allInstalled = false;
-long g_corrected = 0;
+std::atomic<long> g_corrected{0};  // game thread writes, the monitor thread logs
+long g_correctedLogged = 0;
 int g_loggedW = 0, g_loggedH = 0;
 
 bool Fail(const char* what, const char* why)
@@ -222,7 +224,10 @@ bool InstallFullscreenAllResolutions()
 
 void LogDisplayNativeStats()
 {
-    if (g_nativeInstalled && g_corrected) Log("[display] native resolutions corrected: %ld time(s)", g_corrected);
+    const long n = g_corrected.load(std::memory_order_relaxed);
+    if (!g_nativeInstalled || n == g_correctedLogged) return;  // only when it changed (not once a minute for the session)
+    g_correctedLogged = n;
+    Log("[display] native resolutions corrected: %ld time(s)", n);
 }
 
 }  // namespace opf

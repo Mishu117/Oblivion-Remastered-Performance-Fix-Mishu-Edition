@@ -18,7 +18,18 @@ are built a few frames later (`NpcCreationPacing`), and the cells behind you are
 
 Every fix has a switch in `OblivionPerfFix.ini` (the name in brackets after each heading), all on by default in 1.0.0-beta, and the
 DLL turns a fix off by itself if it can't find the exact code it expects (for example after a game update). The fixes
-are grouped by what they help with. `RdgParallelTranslate=2` selects automatically (off on cards under 9.5 GB);
+are grouped by what they help with.
+
+Since 1.2.4 the ini has three parts, and this page follows the same groups:
+1. **Performance improvements** (all on): every section below up to "Frame generation", and "Memory safety". Same
+   picture, same play.
+2. **Game bug fixes** (on, except `AutosaveFollowsMenu` and `FullscreenAllResolutions`): the fixes marked "game bug" in
+   any section, and "Crash and bug fixes". The result is not the stock game's: the bug is gone. Set them to 0 to stay
+   closer to the stock game; leave the crash and freeze guards on.
+3. **Optional tweaks** (all off): the fixes marked "trade-off" or "optional". They may change the look or how the game
+   plays, on purpose, and do nothing unless you switch them on.
+
+`RdgParallelTranslate=2` selects automatically (off on cards under 9.5 GB);
 `FrameGenPacingTuning=1` selects Tuning Set B (except on Adrenalin's own swap chain, see that section). `HitchLedger` is a diagnostic and is off by default. The evidence for every
 measurement below, and the ideas we tested and rejected, are in [research.md](research.md).
 
@@ -228,6 +239,57 @@ switch on a stand-in value (on, off, a player's own value).
 **Why the image can't change.** The same structures are built from the same data with the same settings, in the same frame, before the frame's ray-traced scene is gathered: no part of the frame can see an object without its structure. Only their place in the graphics card's work moves, from one by one before the frame to one batch at its start. An object removed while its request waits takes the request with it (the engine's own clean-up). Frozen screenshots with the switch on and off match within the run-to-run variation. Installed when the game starts (not on the OBSE64 route), then live.
 
 **Measured (2026-10-25, the Imperial City flight, 4K, DLSS Performance, ray tracing on, RTX 4090; a fresh game per run, off and on in turn, three rounds):** the two frames that waited for the builds, graphics card busy: at 97.6 s 37.1 / 45.1 / 31.9 -> 18.8 / 20.0 / 21.0 ms, at 41.2 s 52.1 / 67.3 / 62.6 -> 22.1 / 20.4 / 23.9 ms. Frames of 33 ms or more on the flight 158 -> 133.
+
+---
+
+<a id="separableskinabove4k"></a>
+
+### Magenta specks on skin on wide renders (`SeparableSkinAbove4K`, game bug)
+
+[Evidence](research.md#separableskinabove4k).
+
+**The problem.** With Effects Quality at Ultra and the game rendering at 100 % (DLSS DLAA or FSR Native AA), sunlit
+characters show small glowing magenta specks on the edges of skin and cloth: a skirt's metal studs, a hand. It is a bug
+in the game itself (it happens without this DLL, with FSR as well as DLSS), and players reported it in 2025. It comes from
+the engine's "Burley" skin scattering, the way it spreads light under skin, when it runs at full resolution.
+
+**What we did.** With `SeparableSkinAbove4K=1`, while the game renders more than 3840 pixels across (wider than a 4K
+screen: an ultrawide like 5120x2160 at DLSS DLAA or FSR Native AA) the DLL switches skin scattering to the engine's other
+method, "separable" (`r.SSS.Burley.Quality 0`). At 3840 or less (a 4K screen, or DLSS Quality on the ultrawide) the game's
+own method comes back within a second. Every case with specks so far rendered 5120 wide; none showed at 3413 wide,
+nor on a 4K 16:9 screen at DLAA (3840 wide).
+
+**What changes.** Skin is shaded by the separable method on wide renders. On the test character at play distance the
+contributor saw the same skin and a slightly cheaper frame (his measurements: pull request #35); close-ups in dialogue
+were not compared, and we have no display that wide to check it ourselves. The specks are gone. On by default since 1.2.4, in the ini's "Game bug fixes"; `SeparableSkinAbove4K=0` keeps the game's skin
+everywhere (live). Pull request #35 by Mishu117.
+<a id="hdrgamma22"></a>
+
+### HDR shadows as on an SDR monitor (`HdrGamma22`, trade-off, on)
+
+[Evidence](research.md#hdrgamma22).
+
+**The problem.** In HDR the game looks washed out next to its own SDR picture. The contributor measured it (pull request
+#36): the HDR picture copies the SDR picture as Windows decodes SDR content, with the sRGB curve. A normal SDR monitor decodes with gamma 2.2, which makes
+the darks deeper. So next to SDR on a monitor, the HDR darks sit about 1.7 to 2.7 times higher compared with the
+mid-tones. No game setting changes that shape: not Mid-Tone, Black Floor, the output device, the film-curve settings
+or a colour-grading LUT (the game's HDR path does not use the last two).
+
+**What we did.** The HDR tone curve is a small table of 20 numbers that the game computes when an HDR setting changes:
+the curve's black floor, mid point and peak, and two smooth pieces of 5 numbers each. Every pass that draws with the
+curve reads it from that one table. With the switch on, the fix computes new numbers for the two pieces, on a
+background thread. The result is the same curve, with every value below a reference white re-decoded as gamma 2.2
+instead of sRGB. The reference white is 9.5 times the Mid-Tone, where the curve matches SDR white. The fix then
+writes the new numbers into the table. Highlights above the reference white, the peak and the black floor stay the
+game's. When the game recomputes the table (any HDR setting change), the fix computes again. Switched off, it puts the
+game's numbers back.
+
+**What changes.** On purpose, the picture: in HDR, darks and mid-tones below the reference white get SDR-on-a-monitor's
+shadow depth (in the contributor's measurements the shape then matches SDR at gamma 2.2 across the dark and middle
+range, and the HUD pixels are identical: pull request #36). The HUD and menus are unchanged. Frame generation sees the corrected picture. Nothing changes in SDR.
+An **optional tweak**, off by default (it changes the picture on purpose; the contributor ships it on in his fork
+because without it the HDR picture's shadows do not match the game's own SDR picture on a monitor); `HdrGamma22=1`
+switches it on. Switches live.
 
 ## Horses and collision checks: work the game repeated every frame
 
@@ -498,18 +560,21 @@ and switches them on and off.
 
 **Measured:** Imperial City flight, small profile: tiles built inside a wait 6 in 10 flights without the fix (frame stalls of 82 ms to 2.6 s), 0 in 7 with it (largest tick-group-0 wait 29 ms); 4K FG test completed without a crash.
 
+---
+
 <a id="vtstreaminguploads"></a>
 
-### Walls and roofs sharp sooner after a door (`VtStreamingUploads`, fork-local, off)
+### Walls and roofs sharp sooner after a door (`VtStreamingUploads`, trade-off, off)
 
-[Evidence](research.md#vtstreaminguploads). Fork-local: off by default (`VtStreamingUploads=0`), switched on only by
+[Evidence](research.md#vtstreaminguploads). **A trade-off**: off by default (`VtStreamingUploads=0`), switched on only by
 choice.
 
 **The problem.** Walls, roofs and stairs of the open world use streamed ("virtual") textures: the picture is split into
 small pages, and each frame the graphics card reports which pages it needs at which detail; those pages are read and
 uploaded. The game uploads at most 4 streamed pages per frame. After stepping out of a door into a wide view that was
 not loaded before (the Imperial City Waterfront from its lighthouse), hundreds of pages are wanted at once: walls 40 m
-away come in blotchy, without mortar lines, and reach full detail about 8 s after the picture fades in.
+away come in blotchy, without mortar lines, and reach full detail seconds after the picture fades in (pull request
+#34).
 
 *Analogy:* a delivery van that may carry only four boxes per trip, with a whole street waiting for its furniture.
 
@@ -520,8 +585,8 @@ and writes it again if the game's settings put the 4 back (that happens once, a 
 you change graphics settings).
 
 **What it changes.** The same pages are uploaded, sooner; once everything has arrived the picture is the same. What
-you see during the first seconds after a door is sharper sooner. The cost is more upload work in the frames that
-stream (see the measurements).
+you see during the first seconds after a door is sharper sooner, so this is not "same image" frame for frame. The cost
+is more upload work in the frames that stream (see the measurements).
 
 ---
 
@@ -972,6 +1037,22 @@ leaves the same physics state.
 
 ---
 
+<a id="clothbuilddefer"></a>
+
+### A far-away robe's cloth built a few frames later (`ClothBuildDefer`)
+
+[Evidence](research.md#clothbuilddefer).
+
+**The problem.** A robed character created in the distance (`NpcCreationPacing` spreads such characters over frames) still built its robe's cloth simulation in the middle of its creation step, often more than once: the robe's own set-up asks for it again a few milliseconds later, and again after the cloth has run a frame or two. Each build is a few milliseconds on the main thread, and where several robed characters appear at once (a shrine's worshippers, a chapel) those steps were the frames that went over the budget.
+
+*Analogy:* tailoring each customer's robe while they are still a mile away and walking towards you, three times over, instead of once when they are about to arrive.
+
+**What we did.** When a far-away character that nobody can see asks for its robe's first cloth build (the robe has no simulation yet), the build waits. Further requests while it waits become part of the same build. It is made a few frames later, with the game's own function and the robe as it is at that moment, as a piece of the frame's pacing budget, like the character's other creation steps. It is made at once when the character comes near or into view, when the character's own logic asks whether its cloth is simulating, on a loading screen or in a menu, when the switch goes off, and after at most 60 frames. A robe whose character is removed while its build waits is never built.
+
+**Why the picture is the same.** Only the moment of the build moves, and only while the character is far away and unseen: the same robe is built from the same state by the game's own code. Until then the robe behaves as one that was just put on: no cloth movement yet, drawn as the plain skinned mesh, which nobody sees at that distance. When the character comes into view the cloth is built in the frame after it is first drawn (1-2 frames, like `NpcCreationPacing`'s own steps, mostly inside the spawn fade-in); until then the renderer has the empty box described below. One thing the game does right after a robe's first build is redone after the delayed one: the robe's bounding box (the box around its cloth that the renderer uses, for example to decide which shadow areas it touches) is computed from the new cloth and handed to the renderer, as the game does when the robe is put on; without that the robe would keep the empty box it got while it had no cloth. Screenshots of the shrine's robed worshippers after they come near match within the run-to-run variation (the grass in the wind and the characters' poses vary between any two runs). A timing change of the same kind as `NpcCreationPacing`'s, with the same bounds: a few frames, off-screen, an off switch. Installed when the game starts (not on the OBSE64 route), then live; it needs `NpcCreationPacing`.
+
+---
+
 <a id="rigvmhashmemo"></a>
 
 ### Animation rig set-up remembered (`RigVmHashMemo`, `RigLogicMapCache`)
@@ -1090,7 +1171,11 @@ fix stays out.
 What is left of the crossing frame is the incoming row (temporary data load ~3.5 ms, attaching the cells ~3.5 ms) and the
 old engine's ordinary frame work. `CellBufferPacedEvict=1` is on by default.
 
-### Old-engine settings without editing its file (`OldEngineSettings`, fork-local, nothing set by default)
+---
+
+<a id="oldenginesettings"></a>
+
+### Old-engine settings without editing its file (`OldEngineSettings`, Mishu's Edition only, nothing set by default)
 
 [Evidence](research.md#oldenginesettings).
 
@@ -1108,153 +1193,6 @@ it found, so the file stays as it was. Removing a line puts the found value back
 **What changes.** Whatever the setting changes, and only where the game reads it after it is set; each use is a
 choice of yours, not a fix that leaves the game identical. While a setting is listed it wins over the game's own
 option for it (it is set again within a second).
-
-<a id="hdrmenurows"></a>
-
-### HDR section in the game's Graphics menu (`HdrMenuRows`, fork-local, on by default)
-
-[Evidence](research.md#hdrmenurows).
-
-**The problem.** The PC version has HDR, but no menu option for it. It can only be switched in the settings file, along
-with its peak brightness in nits. There was also a launch bug: with HDR on at, say, 1300 nits, the game's tone mapping
-still used a 1000-nit maximum after every start, until the nits value was changed.
-
-**What we did.** The game's menu is data: each page lists sections ("General", "Quality", ...), and each section is a
-table of rows. Once those tables have loaded, the fix adds a section **HDR** between General and Quality. It builds the
-section's table with the engine's own object creation, and fills it with copies of the game's own rows:
-- **HDR** (On/Off; default Off, so the player switches it on);
-- **Peak Brightness**, 400 to 4000 nits (default 1000): the brightest highlight; match it to your display's peak;
-- **Paper White**, 80 to 400 nits (default 200): how bright menus, subtitles and the HUD are;
-- **Black Floor**, -4 to -1 (log10 nits; default -4, the deepest black): -4 recommended for OLED, -2 for LED/LCD;
-- **Mid-Tone**, 5 to 50 nits (default 15, the game's): the scene's mid-tones, so the overall brightness of the picture.
-
-Each row has a short description, shows its current value (your saved one where there is one), and works, applies and
-saves like the game's own rows. At start-up the fix also sets the game's HDR switches to the values the rows show, so
-the saved nits are what the tone mapping uses, and paper white to 200 when none is saved (the engine's is 300).
-
-The rows also lock the way the game's own rows do. The game greys a row out by its kind: Display Resolution in
-borderless mode, for example. It has two kinds for HDR, "HDR options" (usable only with HDR on) and "SDR options"
-(usable only with it off), that no PC row used. The four sliders are made HDR options, and General's Brightness
-Intensity an SDR option, since it does nothing with HDR on (measured). The game then greys the sliders out while HDR is
-off and Brightness while it is on, and switches them as soon as HDR changes.
-
-The game keeps only the saved options of rows that exist when it loads its settings save, and these rows are made a
-moment later. So the fix reads the save when the game starts. When it holds HDR options, the fix puts them back and
-lets the game write its settings save once with its own writer.
-
-**What changes.** A fourth section on the Graphics page, and Brightness Intensity greyed out while HDR is on. With HDR
-on, the tone mapping uses your saved peak brightness from the start, instead of 1000 nits until you change it, and paper white is 200 unless you saved another value.
-Nothing else changes until you use the rows. On by default; takes a restart.
-
-<a id="hudaspectrow"></a>
-
-### HUD Aspect Ratio in the Graphics menu (`HudAspectRow`, fork-local, on by default)
-
-[Evidence](research.md#hudaspectrow).
-
-**The problem.** On an ultrawide or super-ultrawide screen the HUD spreads to the far edges: the compass in the middle,
-the health and magicka icons in the bottom corner, far from where you look. The game has no option to keep it closer.
-
-**What we did.** With `HudAspectRow=1`, a "HUD Aspect Ratio" row appears in the Graphics page's General section, after
-Frame Rate Limit and before Show FPS: Wide, 4:3, 16:9, 21:9 or 32:9. Wide (the default) is the game's own HUD. The other
-choices keep the HUD inside a centred area of that shape: on a 5120x2160 screen, 16:9 places the HUD as on a 16:9
-monitor in the middle of the screen. Only the HUD moves; full-screen effects such as the low-health vignette, menus, the
-map, loading screens and fades stay full width. A
-shape wider than your screen is the same as Wide (32:9 on a 21:9 screen, for example). Your choice is saved with the
-other settings.
-
-**What changes.** Nothing until you pick something other than Wide; then the HUD's position. Installed when the game
-starts.
-
-
-### DLSS Ray Reconstruction in the Graphics menu (`DlssRayReconstruction`, fork-local, trade-off, on by default)
-
-[Evidence](research.md#dlssrayreconstruction).
-
-**The problem.** The game's DLSS plugin includes NVIDIA's Ray Reconstruction, an AI denoiser for ray-traced lighting and
-reflections, but the game never offers it in its menu. The only way to turn it on was a console variable.
-
-**What we did.** With `DlssRayReconstruction=1`, a "DLSS - Ray Reconstruction" row (Off / On) appears in the Graphics
-page's Advanced section, right below DLSS - Frame Generation. It is a copy of the Frame Generation row with its own name,
-description and switch, and it behaves like the other DLSS rows: greyed out when DLSS is not the upscaler (the game's own
-lock, which looks each row up in a fixed list of its settings; for this one row the DLL answers "DLSS"). Your choice is
-saved with the game's other settings and applied at every launch. The row only appears when NVIDIA's Ray Reconstruction
-file is present: `nvngx_dlssd.dll` in the game's DLSS folder. The game does not include it, and neither does the fork
-(it is NVIDIA's file); a model the NVIDIA driver downloads does not count, as Ray Reconstruction was only tested with the
-file.
-
-**What changes.** Nothing until you pick On. Then the picture changes (ray-traced lighting and reflections are denoised
-by DLSS instead of the engine) and it costs GPU time. It only acts on hardware ray tracing: with Lumen Hardware RT off it
-has nothing to work on. Measured on an RTX 5090 at 5120x2160 with DLSS Ultra Performance: 0.4 ms more GPU time per
-frame (about 5 %). The engine's own reflection and shadow denoisers stay as they are: switching them off as well, as
-some Ray Reconstruction mods do, made no visible or measurable difference. A **trade-off**: on by default (0 turns it off); installed
-when the game starts.
-
-<a id="separableskinabove4k"></a>
-
-### Magenta specks on skin on wide renders (`SeparableSkinAbove4K`, fork-local, trade-off, on by default)
-
-[Evidence](research.md#separableskinabove4k).
-
-**The problem.** With Effects Quality at Ultra and the game rendering at 100 % (DLSS DLAA or FSR Native AA), sunlit
-characters show small glowing magenta specks on the edges of skin and cloth: a skirt's metal studs, a hand. It is a bug
-in the game itself (it happens without this DLL, with FSR as well as DLSS), and players reported it in 2025. It comes from
-the engine's "Burley" skin scattering, the way it spreads light under skin, when it runs at full resolution.
-
-**What we did.** With `SeparableSkinAbove4K=1`, while the game renders more than 3840 pixels across (wider than a 4K
-screen: an ultrawide like 5120x2160 at DLSS DLAA or FSR Native AA) the DLL switches skin scattering to the engine's other
-method, "separable" (`r.SSS.Burley.Quality 0`). At 3840 or less (a 4K screen, or DLSS Quality on the ultrawide) the game's
-own method comes back within a second. Every case with specks so far rendered 5120 wide; none showed at 3413 wide, nor on a 4K 16:9 screen at
-DLAA (3840 wide).
-
-**What changes.** Skin is shaded by the separable method on wide renders. On the test character at play distance the skin looked
-the same and the frame cost about 0.2 ms less on an RTX 5090; close-ups in dialogue were not compared. The specks are
-gone. A **trade-off**: on by default (0 turns it off); switches live.
-
-
-### HDR shadows as on an SDR monitor (`HdrGamma22`, fork-local, trade-off, on by default)
-
-[Evidence](research.md#hdrgamma22).
-
-**The problem.** In HDR the game looks washed out next to its own SDR picture. Measured: the HDR picture copies the SDR
-picture as Windows decodes SDR content, with the sRGB curve. A normal SDR monitor decodes with gamma 2.2, which makes
-the darks deeper. So next to SDR on a monitor, the HDR darks sit about 1.7 to 2.7 times higher compared with the
-mid-tones. No game setting changes that shape: not Mid-Tone, Black Floor, the output device, the film-curve settings
-or a colour-grading LUT (the game's HDR path does not use the last two).
-
-**What we did.** The HDR tone curve is a small table of 20 numbers that the game computes when an HDR setting changes:
-the curve's black floor, mid point and peak, and two smooth pieces of 5 numbers each. Every pass that draws with the
-curve reads it from that one table. With the switch on, the fix computes new numbers for the two pieces, on a
-background thread. The result is the same curve, with every value below a reference white re-decoded as gamma 2.2
-instead of sRGB. The reference white is 9.5 times the Mid-Tone, where the curve matches SDR white. The fix then
-writes the new numbers into the table. Highlights above the reference white, the peak and the black floor stay the
-game's. When the game recomputes the table (any HDR setting change), the fix computes again. Switched off, it puts the
-game's numbers back.
-
-**What changes.** On purpose, the picture: in HDR, darks and mid-tones below the reference white get SDR-on-a-monitor's
-shadow depth (measured: the shape now matches SDR at gamma 2.2 across the dark and middle range). The HUD and menus
-are unchanged (measured: identical HUD pixels). Frame generation sees the corrected picture. Nothing changes in SDR.
-A **trade-off**: on by default (0 turns it off); switches live.
-
-<a id="monitornativefromwindows"></a>
-
-### Display resolutions for wide monitors (`MonitorNativeFromWindows`, `FullscreenAllResolutions`, fork-local, on by default)
-
-[Evidence](research.md#monitornativefromwindows).
-
-**The problem.** The game takes a monitor's native resolution from the first timing in its EDID (the description the
-monitor sends). That field cannot hold a width above 4095, so wide monitors put a smaller resolution there: on an
-Alienware AW3926QW (5120x2160) it says 3440x1440. The game then shows 3440x1440 as the borderless resolution and, in
-fullscreen, lists only resolutions with exactly that aspect ratio and no wider: 3440x1440 alone.
-
-**What we did.** `MonitorNativeFromWindows`: right after the engine reads the monitors, each monitor's native resolution
-is replaced by the one Windows calls the monitor's preferred mode, when that is one of the monitor's own modes.
-`FullscreenAllResolutions`: the fullscreen list keeps every mode Windows offers for the monitor (720 lines and up),
-instead of only the native aspect ratio.
-
-**What changes.** The resolutions the Graphics page offers. In borderless the game draws at the desktop's size either
-way (measured: a 5120x2160 window with 3440x1440 shown). Other aspect ratios in fullscreen are stretched or
-letterboxed by the display or the graphics driver. On by default; takes a restart.
 
 ## Doors, loading screens and start-up
 
@@ -1282,6 +1220,8 @@ letterboxed by the display or the graphics driver. On by default; takes a restar
 
 The extra work behind the loading screen takes 2-14 ms of game-thread time plus 3-12 ms for the refresh, so the picture comes back as early as before.
 
+---
+
 <a id="streambehindloadingscreen"></a>
 
 ### Textures streamed behind the loading screen (`StreamBehindLoadingScreen`)
@@ -1293,8 +1233,8 @@ texture pool to 1 MB, so every sharp texture level is dropped while the new area
 Once the new area has loaded, a timer on the loading screen checks twice a second whether it is ready and then starts
 the fade-in. The first thing the fade-in does is put the pool size back and wait until the new view's textures are
 streamed in again, so that the world never appears blurry. That wait is the long, frozen last image of every loading
-screen: about 0.15 s after entering an interior and 0.3 s after stepping outside at 5120x2160 (0.1 / 0.26 s at 720p),
-every time. Meanwhile the loading screen had been sitting idle, the area already loaded.
+screen: a tenth of a second to more than half a second after every door, longer after stepping outside (measured on our
+PC; the contributor's measurements: pull request #34). Meanwhile the loading screen had been sitting idle, the area already loaded.
 
 *Analogy:* a shop that clears its shelves while the delivery is unloaded, and only starts restocking when the first
 customer is at the door, although the stockroom had been ready for a while.
@@ -1314,23 +1254,22 @@ check, half a second more loading screen, so the fix waits until the loading has
 by byte patterns (the timer and its checks, the function that arms it, the stored pool size, the texture streamer) and
 stays out with a log line if anything differs.
 
-**Effect** (Cheydinhal inn: out of the inn, into it, out again; 5 + 5 fresh launches each, fix on and off in turns):
+**Effect.** The contributor's measurements (the Cheydinhal inn door, a city gate and fast travel, at two resolutions):
+pull request #34. Ours: our PC, small profile (854x480), Cheydinhal inn door, switched live A B B A A B: the fade-in's
+texture wait 0.3-1.9 ms with it against 99-710 ms without; the loading screen a little shorter at every transition
+(arriving outside 6325 -> 5977 ms, entering the inn 89 ms shorter, leaving it 4402 -> 3949 ms); hitch time after the
+exit -29 %; the end pictures within the run-to-run difference of two runs without it; 2.1-2.7 ms more main-thread work
+per loading-screen frame, behind the loading screen.
 
-| Setting | Last image held before the world appears (exit / entry) | Loading screen length |
-|---|---|---|
-| 5120x2160 | 539 -> 230 ms / 225 -> 75 ms | unchanged |
-| 720p | 501 -> 226 ms / 163 -> 73 ms | unchanged |
-
-City gate and fast travel at 5120x2160 (Cheydinhal west gate in and out twice; fast travel to Cheydinhal, Weye, Leyawiin
-and the Imperial City; 3 + 3 fresh launches): the last image held 420-437 -> 166-213 ms at the gate and 327-421 ->
-113-160 ms after a fast travel, loading screens as long as before.
+---
 
 <a id="unfreezebehindloadingscreen"></a>
 
 ### Exits settle behind the loading screen, like entries (`UnfreezeBehindLoadingScreen`, trade-off, off)
 
-[Evidence](research.md#unfreezebehindloadingscreen). Fork-local, **a trade-off**: off by default, switched on only by
-choice.
+[Evidence](research.md#unfreezebehindloadingscreen). **A trade-off**: off by default, switched on only by choice. It
+keeps the world running behind the loading screen for longer than the stock game does after an exit, which this
+project's rules do not accept as a default.
 
 **The problem.** Step into an inn and the picture fades in on your character standing normally in a room that is
 already lit and textured. Step out of it and you see your character drop into place, the shadows and lighting of the
@@ -1343,38 +1282,35 @@ that settling happens in view.
 frozen, the fix calls the game's own "loading over" step, the one the game itself calls for interiors, and lets the
 world be drawn behind the loading screen. The loading screen then stays up until the world has run N ms of real frames
 (at most 3 s more): the game's twice-a-second check that starts the fade-in is skipped until then. After that the
-game's own fade-in runs as before. A lighter variant that only drew the world behind the loading screen while it stayed
-frozen (`DrawBehindLoadingScreen`) was not enough on its own (the character still dropped into place) and was removed
-in fork.27.
+game's own fade-in runs as before. Drawing the world behind the loading screen while it stayed frozen was tried on its
+own and was not enough (the character still dropped into place).
 
 **What it changes.** This is not "same gameplay": like after entering an interior, the world runs for about a second
 before you see it, so nearby NPCs and creatures can move, and the loading screen is about 1 s longer. Entries are left
 alone (the game already does this for them).
 
-**Effect** (5120x2160, the player's own settings; one run each: Cheydinhal inn door, the west gate in and out twice,
-four fast travels): with 1000, all 11 exit-type transitions left their freeze 1.2-1.6 s before the fade-in (it was
-0.2 s after it); the world ran 1.1-1.5 s of frames behind the loading screen; loading screen 3.5 -> 4.5 s for the inn
-exit, +1.0-1.1 s for the gate and the fast travels, 2.9 s for the inn entry as before. In play: on exits the character
-stands normally and the scene looks settled when the picture comes in, as after going indoors.
+**Effect.** With N = 1000 the exits leave their freeze about a second before the fade-in, and the loading screen is
+about that much longer; entries are as before. The contributor's measurements: pull request #34 (we have not measured
+this optional key).
 
-**Fast travel on its own** (`UnfreezeBehindLoadingScreenFastTravel=N`, fork-local, 0 = the same as above). After a fast
-travel the grass of the new area is still filling in during the first second or two of the fade-in (it needs about
-2.5-3 s of the world running, measured), more than after a door. With this set, a fast travel holds the loading screen
-N ms instead, and doors and gates keep `UnfreezeBehindLoadingScreen`'s value. The fix recognises a fast travel by the
-map's own fast-travel request, which runs once for each fast travel from the map (and never for doors). Measured with
-500 / 1000: the three fast travels held 1000 ms (world ran 1.1-1.5 s behind the loading screen), the teleports and the
-inn door 500 ms (0.6-0.8 s). Loading a save (Continue, the Load menu, quickload) gets the same value as fast travel: its
-textures need as long. The fix tells it from a door by what the game did: a load reads its save file through the
-engine's save system, a door or a gate reads none. A loading screen with a save read since the previous one ended gets
-the longer hold. Seen in play: a load from the main menu and one from the pause menu held 1000 ms, a door 500 ms.
+**Fast travel and save loads on their own** (`UnfreezeBehindLoadingScreenFastTravel=N`, 0 = the same as above). After
+a fast travel the grass of the new area is still filling in during the first second or two of the fade-in (it needs
+longer with the world running than after a door; pull request #34). With this set, a fast travel holds the loading
+screen N ms instead, and doors and gates keep `UnfreezeBehindLoadingScreen`'s value. The fix recognises a fast travel
+by the map's own fast-travel request, which runs once for each fast travel from the map (and never for doors).
+Loading a save (Continue, the Load menu, quickload) gets the same value
+as fast travel: its textures need as long. The fix tells it from a door by what the game did: a load reads its save
+file through the engine's save system, a door or a gate reads none. A loading screen with a save read since the
+previous one ended gets the longer hold (the contributor's checks: pull request #34).
 
 ---
 
 <a id="fadevtflushskip"></a>
 
-### No texture flush in the middle of the fade-in (`FadeVtFlushSkip`, fork-local, off)
+### No texture flush in the middle of the fade-in (`FadeVtFlushSkip`, trade-off, off)
 
-[Evidence](research.md#fadevtflushskip). Fork-local: off by default (`FadeVtFlushSkip=0`), switched on only by choice.
+[Evidence](research.md#fadevtflushskip). **A trade-off**: off by default (`FadeVtFlushSkip=0`), switched on only by
+choice.
 
 **The problem.** After a door, a city gate or a fast travel the picture fades in over 2.5 seconds. 1.5 seconds into
 that fade the game empties its whole cache of streamed ("virtual") textures. Walls, roofs and stairs that had already
@@ -1388,9 +1324,10 @@ off the stage and the crew has to put them back while the audience watches.
 starts and fires, but what it would run (the console command `r.VT.Flush`) is skipped, so the textures loaded behind the
 loading screen stay. Needs a restart to switch on; afterwards it can be switched while the game runs.
 
-**What it changes.** The picture during the fade no longer loses detail. Why the game flushes is not known; in tests
-the picture a few seconds after arriving was the same with and without the flush (within run-to-run differences). If
-ground or walls ever look wrong after arriving and only fix themselves when you walk away, switch it off.
+**What it changes.** The picture during the fade no longer loses detail, so it is not "same image" during the fade. Why
+the game flushes is not known; in tests the picture a few seconds after arriving was the same with and without the
+flush (within run-to-run differences). If ground or walls ever look wrong after arriving and only fix themselves when
+you walk away, switch it off.
 
 ---
 
@@ -1457,6 +1394,12 @@ the game's pace came back in play, and the precompile ended after ~6 minutes, ab
 without the fix. Start-up videos before the main menu count as play for the fix (no menu freeze yet), so
 those seconds keep the game's pace.
 
+**Our bug fixed in 1.2.4** (since 1.2.0-beta, both routes; found and fixed by Mishu117 in pull request #33): the check
+for the driver's compile threads used a Windows thread snapshot, which maps memory once for every thread on the PC, and
+the game's built-in web browser (CEF) hooks that mapping while it starts: a rare start-up crash. The threads are now
+listed with one `NtQuerySystemInformation` call, which maps nothing. The OBSE64 route's look-up of the game's main
+thread used the same kind of snapshot (since 1.0.0-beta) and was changed the same way.
+
 ## Menus
 
 <a id="displaymodecache"></a>
@@ -1474,6 +1417,115 @@ those seconds keep the game's pace.
 **Why the game can't change.** The game receives exactly the bytes Windows gave it: Windows writes the same 188 bytes for a mode whatever was in the buffer before (the DLL checks this the first time and stays off if not). The monitor list, the resolution list and every other value the engine keeps about your displays were read from memory with the fix off and on: identical.
 
 **Effect.** At 4K with frame generation, the open on the Graphics page went from 720-724 ms to 530-554 ms with this fix alone (with `MenuScreenshotFilter` too: below). Each check costs 0.7 ms. The game also rebuilds these lists about 30 times while it starts, which gets quicker too.
+
+---
+
+<a id="monitornativefromwindows"></a>
+
+### Display resolutions for wide monitors (`MonitorNativeFromWindows`, `FullscreenAllResolutions`, game bug)
+
+[Evidence](research.md#monitornativefromwindows).
+
+**The problem.** The game takes a monitor's native resolution from the first timing in its EDID (the description the
+monitor sends). That field cannot hold a width above 4095, so wide monitors put a smaller resolution there: on an
+Alienware AW3926QW (5120x2160) it says 3440x1440. The game then shows 3440x1440 as the borderless resolution and, in
+fullscreen, lists only resolutions with exactly that aspect ratio and no wider: 3440x1440 alone.
+
+**What we did.** `MonitorNativeFromWindows`: right after the engine reads the monitors, each monitor's native resolution
+is replaced by the one Windows calls the monitor's preferred mode, when that is one of the monitor's own modes.
+`FullscreenAllResolutions`: the fullscreen list keeps every mode Windows offers for the monitor (720 lines and up),
+instead of only the native aspect ratio.
+
+**What changes.** The resolutions the Graphics page offers. In borderless the game draws at the desktop's size either
+way (the contributor checked it on his monitor: pull request #35). Other aspect ratios in fullscreen are stretched or
+letterboxed by the display or the graphics driver. `MonitorNativeFromWindows` is on by default;
+`FullscreenAllResolutions` is off by default since the first fixes the reported bug and the second only adds choices.
+Both take a restart.
+<a id="hdrmenurows"></a>
+
+### HDR section in the game's Graphics menu (`HdrMenuRows`, off)
+
+[Evidence](research.md#hdrmenurows).
+
+**The problem.** The PC version has HDR, but no menu option for it. It can only be switched in the settings file, along
+with its peak brightness in nits. There was also a launch bug: with HDR on at, say, 1300 nits, the game's tone mapping
+still used a 1000-nit maximum after every start, until the nits value was changed.
+
+**What we did.** The game's menu is data: each page lists sections ("General", "Quality", ...), and each section is a
+table of rows. Once those tables have loaded, the fix adds a section **HDR** between General and Quality. It builds the
+section's table with the engine's own object creation, and fills it with copies of the game's own rows:
+- **HDR** (On/Off; default Off, so the player switches it on);
+- **Peak Brightness**, 400 to 4000 nits (default 1000): the brightest highlight; match it to your display's peak;
+- **Paper White**, 80 to 400 nits (default 200): how bright menus, subtitles and the HUD are;
+- **Black Floor**, -4 to -1 (log10 nits; default -4, the deepest black): -4 recommended for OLED, -2 for LED/LCD;
+- **Mid-Tone**, 5 to 50 nits (default 15, the game's): the scene's mid-tones, so the overall brightness of the picture.
+
+Each row has a short description, shows its current value (your saved one where there is one), and works, applies and
+saves like the game's own rows. At start-up the fix also sets the game's HDR switches to the values the rows show, so
+the saved nits are what the tone mapping uses, and paper white to 200 when none is saved (the engine's is 300).
+
+The rows also lock the way the game's own rows do. The game greys a row out by its kind: Display Resolution in
+borderless mode, for example. It has two kinds for HDR, "HDR options" (usable only with HDR on) and "SDR options"
+(usable only with it off), that no PC row used. The four sliders are made HDR options, and General's Brightness
+Intensity an SDR option, since it does nothing with HDR on (the contributor's check). The game then greys the sliders out while HDR is
+off and Brightness while it is on, and switches them as soon as HDR changes.
+
+The game keeps only the saved options of rows that exist when it loads its settings save, and these rows are made a
+moment later. So the fix reads the save when the game starts. When it holds HDR options, the fix puts them back and
+lets the game write its settings save once with its own writer.
+
+**What changes.** A fourth section on the Graphics page, and Brightness Intensity greyed out while HDR is on. With HDR
+on, the tone mapping uses your saved peak brightness from the start, instead of 1000 nits until you change it, and
+paper white is 200 unless you saved another value.
+Nothing else changes until you use the rows. Off by default (`HdrMenuRows=1`); takes a restart.
+---
+
+<a id="hudaspectrow"></a>
+
+### HUD Aspect Ratio in the Graphics menu (`HudAspectRow`, off)
+
+[Evidence](research.md#hudaspectrow).
+
+**The problem.** On an ultrawide or super-ultrawide screen the HUD spreads to the far edges: the compass in the middle,
+the health and magicka icons in the bottom corner, far from where you look. The game has no option to keep it closer.
+
+**What we did.** With `HudAspectRow=1`, a "HUD Aspect Ratio" row appears in the Graphics page's General section, after
+Frame Rate Limit and before Show FPS: Wide, 4:3, 16:9, 21:9 or 32:9. Wide (the default) is the game's own HUD. The other
+choices keep the HUD inside a centred area of that shape: on an ultrawide screen, 16:9 places the HUD as on a 16:9
+monitor in the middle of the screen. Only the HUD moves; full-screen effects such as the low-health vignette, menus, the
+map, loading screens and fades stay full width. A
+shape wider than your screen is the same as Wide (32:9 on a 21:9 screen, for example). Your choice is saved with the
+other settings.
+
+**What changes.** Nothing until you pick something other than Wide; then the HUD's position. Off by default
+(`HudAspectRow=1`); installed when the game starts.
+
+---
+
+<a id="dlssrayreconstruction"></a>
+
+### DLSS Ray Reconstruction in the Graphics menu (`DlssRayReconstruction`, trade-off, off)
+
+[Evidence](research.md#dlssrayreconstruction).
+
+**The problem.** The game's DLSS plugin includes NVIDIA's Ray Reconstruction, an AI denoiser for ray-traced lighting and
+reflections, but the game never offers it in its menu. The only way to turn it on was a console variable.
+
+**What we did.** With `DlssRayReconstruction=1`, a "DLSS - Ray Reconstruction" row (Off / On) appears in the Graphics
+page's Advanced section, right below DLSS - Frame Generation. It is a copy of the Frame Generation row with its own name,
+description and switch, and it behaves like the other DLSS rows: greyed out when DLSS is not the upscaler (the game's own
+lock, which looks each row up in a fixed list of its settings; for this one row the DLL answers "DLSS"). Your choice is
+saved with the game's other settings and applied at every launch. The row only appears when NVIDIA's Ray Reconstruction
+file is present: `nvngx_dlssd.dll` in the game's DLSS folder. The game does not include it, and neither does this DLL
+(it is NVIDIA's file); a model the NVIDIA driver downloads does not count, as Ray Reconstruction was only tested with the
+file.
+
+**What changes.** Nothing until you pick On. Then the picture changes (ray-traced lighting and reflections are denoised
+by DLSS instead of the engine) and it costs GPU time. It only acts on hardware ray tracing: with Lumen Hardware RT off it
+has nothing to work on. Its GPU cost: the contributor's measurements, pull request #36 (we have no NVIDIA card to
+measure it). The engine's own reflection and shadow denoisers stay as they are (in the contributor's tests switching
+them off as well made no difference). A **trade-off**: off by default
+(`DlssRayReconstruction=1`); installed when the game starts.
 
 ---
 
@@ -1580,99 +1632,6 @@ switched live on/off/off/on, four opens each):** the frame that opens the invent
 170 ms -> ~121 ms, screen still ~115 ms -> ~70 ms. Pictures of the inventory and of the world after closing look the
 same with and without. Closing the menu is not affected (that hitch is the world's first frame being drawn again).
 
-<a id="hdrmenubackground"></a>
-
-### The menu's background in HDR as in SDR (`HdrMenuBackground`, fork-local, trade-off, on by default)
-
-[Evidence](research.md#hdrmenubackground).
-
-**The problem.** In HDR the menu (inventory, map, System, ...) looks grey and washed out behind its buttons. The world
-behind the menu is that same screenshot (the menu shows it blurred). In SDR the screenshot holds ordinary colours. In
-HDR it holds the HDR signal's values (PQ, the curve HDR10 sends to the monitor), and the menu shows those values as if
-they were ordinary colours. Something 3.5 nits bright in the world is shown at about a fifth of the menu's white, and
-the bright parts are pulled down: everything ends up a flat grey.
-
-**What we did.** The fix wraps the one step where the game resizes that screenshot for the menu. When the switch is on
-and the output is HDR10, it turns each colour value back into the brightness the world had (in nits), then into the
-ordinary colour the menu shows at that brightness. The menu's white is the Paper White setting (`r.HDR.UI.Luminance`),
-and anything above 80 % of it is rolled off softly instead of clipped. It does nothing in SDR or with any other HDR
-output, and the game's two other uses of the resize step are left alone.
-
-**What changes.** On purpose, the picture: the menu's background in HDR. Measured: the HDR menu now follows the SDR menu
-region by region (within ±8 %, stock ±30 %; its shadows were 2.1 times SDR's, now the same as the rest). It sits a little
-darker overall than SDR relative to the world. Converting a 5120x2160 screenshot takes about 1.3 ms (in bands on helper threads), in a
-menu-opening frame of about 155 ms. A **trade-off**: on by default (0 turns it off); installed when the game starts, then switches live.
-
-<a id="hdrsavethumbnail"></a>
-
-### Save thumbnails in HDR (`HdrSaveThumbnail`, fork-local, trade-off, on by default)
-
-[Evidence](research.md#hdrsavethumbnail).
-
-**The problem.** A save's thumbnail is the same kind of screenshot as the menu's background, so a save made in HDR
-stores the HDR values as if they were ordinary colour. The Load and Save menus then show a grey, washed-out picture.
-
-**What we did.** Every save's picture is copied once, inside the game's own screenshot callback, before the save turns
-it into a JPEG. That one copy now goes through the DLL, which converts the copied picture with the same table as
-`HdrMenuBackground` (HDR10 only). A save made from a menu uses the picture the game cached when the menu opened; the
-cache itself is left as it is and is converted on its way into the save, so no picture is converted twice.
-
-**What changes.** On purpose, the picture: thumbnails of saves made in HDR from now on. Saves already made keep the
-thumbnail they have. In SDR nothing changes. A **trade-off**: on by default (0 turns it off); installed when the game starts, then
-switches live.
-
-<a id="shaderscreenafterdriverchange"></a>
-
-### The shader screen comes back after a driver update (`ShaderScreenAfterDriverChange`, fork-local, game bug)
-
-[Evidence](research.md#shaderscreenafterdriverchange).
-
-**The problem.** The very first time the game starts, it waits on a "Shaders preloading" screen while it builds its
-shaders. It decides that only once, by asking whether your settings file exists yet. A new graphics driver throws away
-the shaders the driver had already built, but your settings file is still there, so the screen never comes back. The
-game then builds everything in the background while you play, which stutters for the first few minutes. Players get
-the screen back by renaming `Save_Settings.sav`, which also resets every setting.
-
-**What we did.** The DLL notes your graphics card and driver version in `OblivionPerfFix-gpu.txt` next to itself. When
-they change, it answers "no settings file yet" to that one question only, so the game shows its own first-launch
-shader screen. Your settings load as usual. Behind the screen the shaders are built at the engine's fast pace (the game
-itself only asks for its slow background pace there); from the main menu on, `PsoPrecompileFast` works as usual. The
-new driver is noted once the shaders are done, so closing the game during the screen brings it back next time. The
-first start with the switch on only notes the card.
-
-**What changes.** After a driver or card change, start-up waits until the shaders are built, as the game does on its
-first launch, instead of building them while you play. That wait is the one thing you notice, so the switch is there
-to turn it off (0). Measured with a warm cache (the change faked): the world came up 65 s later, with no
-shader building left in play (without the screen: about 59 s of it in play). After a driver update (measured by
-emptying NVIDIA's shader cache before every start, 3 starts without the screen and 2 with it, straight into a flight
-along the Silver Road): you wait about 3 minutes on the screen, and then the flight is smooth: 1 hitch instead of about
-40, a worst frame of about 50 ms instead of up to 2 s, a 1 % low of about 70 fps instead of 60. The freeze when the
-world first appears is about 9 s instead of about 20 s. Start-up only.
-
-An earlier test with NVIDIA's shader cache switched off showed more small hitches with the screen than without. That
-was the test, not the game: Unreal drops a built shader from memory when it has not been used for about a minute and
-counts on the driver's cache to bring it back cheaply. With that cache switched off, everything the screen built had to
-be built again during play. After a real driver update the cache is empty but works, which is what this switch is for.
-
-<a id="vramcounterfix"></a>
-
-### The "Show VRAM" counter shows real numbers (`VramCounterFix`, fork-local)
-
-[Evidence](research.md#vramcounterfix).
-
-**The problem.** A bug in the game. Turn on "Show VRAM" in the Graphics page and the corner of the screen says
-"VRAM: 0/0", on every PC (players report it on AMD and NVIDIA cards alike). The counter asks the engine for two numbers:
-how much video memory the game uses, and how much Windows lets it use (its budget). The engine keeps both in a small
-record on the graphics card's object, but in the game's release build nothing ever writes them, so both stay 0.
-
-**What we did.** The counter's question goes through two calls in the game's code, which the DLL sends through a small
-wrapper (found by their code and checked). The wrapper asks the game first. Only when both answers are 0 does it put in
-the same two numbers the engine was meant to supply, from Windows (DXGI), which the DLL already reads once a second for
-its memory line in the log. If a game update fixes the record, the game's own numbers are shown unchanged.
-
-**What changes.** The counter's two numbers, and only while you have it switched on. Checked in game on an RTX 5090: with
-the fix "VRAM: 7,635/31,419", switched off live "VRAM: 0/0". On by default; installed when the game starts, then
-switches live.
 <a id="menuopenflashfix"></a>
 
 ### No bright flash when the menu opens (`MenuOpenFlashFix`)
@@ -1721,14 +1680,58 @@ switches live.
 
 **Why the game can't change.** The same frame is copied and converted the same way: the maintainers' test build read every picture the game's way as well and compared every pixel (identical in all saves checked: quicksaves, autosaves, door autosaves; 480p and 4K with frame generation). Saves load back to the saved spot. The save system's store gets the picture before the save is allowed to go on, as in the game, where both happen before anything else runs. Installed while the game starts, only when the key is on (not on the OBSE64 route).
 
-**On an HDR screen** (fork-local). With HDR on, the game reads the screenshot another way: as high-precision colour, 16
-bytes a pixel (177 MB at 5120x2160), which the main thread then turns into the save's ordinary picture one pixel at a
-time. The fix above only knew the first way, so in HDR every autosave still stopped the game: one frame of 115-175 ms
-about 2.5 s after each door or fast travel. The DLL now handles this way too. It takes the same copy without waiting, and
+**On an HDR screen.** With HDR on, the game reads the screenshot another way: as high-precision colour, 16
+bytes a pixel (several times the ordinary picture's size), which the main thread then turns into the save's ordinary
+picture one pixel at a time. The fix above only knew the first way, so in HDR every autosave still stopped the game
+for one long frame, a few seconds after each door or fast travel. The DLL now handles this way too. It takes the same copy without waiting, and
 a helper thread turns it into the same picture with tables made at start-up from the game's own conversion code (1,024
 entries per colour). The self-test runs the game's own conversion on all 1,024 values of every colour and on 8,192
-random pixels: same bytes. Measured in play (5120x2160, HDR10, eight door autosaves): no frame of 25 ms or more near any
-of the eight saves, against six frames of 115-174 ms before.
+random pixels: same bytes. The gain was measured by the contributor in HDR (pull request #33); our benchmark runs the
+game hidden in SDR, so we could only check that the SDR route is unchanged.
+
+---
+
+<a id="hdrmenubackground"></a>
+
+### The menu's background in HDR as in SDR (`HdrMenuBackground`, trade-off, off)
+
+[Evidence](research.md#hdrmenubackground).
+
+**The problem.** In HDR the menu (inventory, map, System, ...) looks grey and washed out behind its buttons. The world
+behind the menu is that same screenshot (the menu shows it blurred). In SDR the screenshot holds ordinary colours. In
+HDR it holds the HDR signal's values (PQ, the curve HDR10 sends to the monitor), and the menu shows those values as if
+they were ordinary colours. Something 3.5 nits bright in the world is shown at about a fifth of the menu's white, and
+the bright parts are pulled down: everything ends up a flat grey.
+
+**What we did.** The fix wraps the one step where the game resizes that screenshot for the menu. When the switch is on
+and the output is HDR10, it turns each colour value back into the brightness the world had (in nits), then into the
+ordinary colour the menu shows at that brightness. The menu's white is the Paper White setting (`r.HDR.UI.Luminance`),
+and anything above 80 % of it is rolled off softly instead of clipped. It does nothing in SDR or with any other HDR
+output, and the game's two other uses of the resize step are left alone.
+
+**What changes.** On purpose, the picture: the menu's background in HDR, which then follows the SDR menu closely (the
+contributor's comparison and timing: pull request #36). The conversion runs in bands on helper threads, inside the
+menu-opening frame. A **trade-off**: off by default (`HdrMenuBackground=1`); installed
+when the game starts, then switches live.
+---
+
+<a id="hdrsavethumbnail"></a>
+
+### Save thumbnails in HDR (`HdrSaveThumbnail`, trade-off, off)
+
+[Evidence](research.md#hdrsavethumbnail).
+
+**The problem.** A save's thumbnail is the same kind of screenshot as the menu's background, so a save made in HDR
+stores the HDR values as if they were ordinary colour. The Load and Save menus then show a grey, washed-out picture.
+
+**What we did.** Every save's picture is copied once, inside the game's own screenshot callback, before the save turns
+it into a JPEG. That one copy now goes through the DLL, which converts the copied picture with the same table as
+`HdrMenuBackground` (HDR10 only). A save made from a menu uses the picture the game cached when the menu opened; the
+cache itself is left as it is and is converted on its way into the save, so no picture is converted twice.
+
+**What changes.** On purpose, the picture: thumbnails of saves made in HDR from now on. Saves already made keep the
+thumbnail they have. In SDR nothing changes. A **trade-off**: off by default (`HdrSaveThumbnail=1`); installed when the game
+starts, then switches live.
 
 ---
 
@@ -1748,9 +1751,11 @@ of the eight saves, against six frames of 115-174 ms before.
 
 **Effect (all three together).** Quicksaves in a held, save-free scene at 4K with frame generation and a 60 fps cap: the save's frame went from 90-113 ms (median 110) plus a second frame of 30-43 ms to 25-32 ms (median 28), with no second slow frame; at 480p from 70-77 ms (median 75) to 27-30 ms.
 
+---
+
 <a id="autosavefollowsmenu"></a>
 
-### No autosaves with every autosave option off (`AutosaveFollowsMenu`, on by default)
+### No autosaves with every autosave option off (`AutosaveFollowsMenu`, game bug)
 
 [Evidence](research.md#autosavefollowsmenu).
 
@@ -1760,7 +1765,7 @@ of the eight saves, against six frames of 115-174 ms before.
 
 **What we did.** The game's code calls its autosave from six places. The DLL sends the two without a menu option (after a level-up and the quests' save command) through a small wrapper, found by their code and checked. While all four of the menu's autosave options are off, the wrapper does not make the save; with any one of them on, it saves as before. The other four places (rest, wait, travel, doors) are unchanged.
 
-**What changes.** Only whether those two autosaves are written. The level-up and the quest go on as before, and your own saves and quicksaves are untouched. The key is off until it has been checked in play; switch it on with `AutosaveFollowsMenu=1` (start-up, then live). Each autosave it holds back is one `[autosave]` line in the log.
+**What changes.** Only whether those two autosaves are written. The level-up and the quest go on as before, and your own saves and quicksaves are untouched (checked in play by the contributor). With all four options off there is then no automatic save to go back to after a level-up or at a quest's save point, so it is **off by default** (`AutosaveFollowsMenu=0`, in the ini's "Game bug fixes"); set it to 1 if you want no autosaves at all (installed at start-up, then live; not on the OBSE64 route). Each autosave it holds back is one `[autosave]` line in the log. Pull request #35 by Mishu117.
 
 ## Frame generation
 
@@ -1915,6 +1920,22 @@ with exactly the recorded crash; with the guard it carried on, and the log count
 
 ---
 
+<a id="bow-sneak-1x"></a>
+
+### Bow sneak attacks hit once, with the bow's multiplier (`BowSneakAttackFix`, game bug)
+
+[Evidence](research.md#bow-sneak-1x).
+
+**The problem.** A bug in the game's own code that changes damage. When your arrow lands, both of the game's engines check the hit. The new engine looks up your bow's sneak multiplier (2x, or 3x at higher Sneak) and sends the hit to the old engine, which deals the damage and shows "Sneak attack for 2X damage". But the old engine also runs its own arrow-impact code, and that code always uses 1x. Whichever engine notices the hit first wins: often it is the old one, so the shot says "Sneak attack for 1X damage" and does 1x. When both notice the same arrow, the target is hit twice (1x, then 2x a few milliseconds later). In one measured session of 23 sneak shots, 10 did 2x, 9 did 1x and 4 hit twice.
+
+*Analogy:* two cashiers ring up the same customer. One knows about today's discount, the other never does, and whoever gets there first sets the price; sometimes both charge.
+
+**What we did.** Both hits pass through two calls in the old engine's code, which the DLL sends through small wrappers (found by their code and checked). Each of your arrows now hits once: the second hit of the same arrow on the same target within a quarter of a second is not made (the two hits come a few milliseconds apart). When the old engine's own impact is the first, it uses the multiplier the new engine worked out for your last arrow hit instead of 1x (with a bow that only changes with your Sneak skill). Until your first arrow hit in a session there is no such value yet, and that hit keeps the old engine's 1x, as in the stock game. Hits by other characters are unchanged.
+
+**What changes.** Damage, back to what the game intends: a sneak shot with a bow does your sneak multiplier, once. Checked in play by the contributor (pull request #35): every sneak shot hit once, at the bow's multiplier. On by default since 1.2.4, in the ini's "Game bug fixes"; `BowSneakAttackFix=0` brings back the stock game's damage (start-up, then live; not on the OBSE64 route). Pull request #35 by Mishu117. Nothing you see changes apart from the damage and the "Sneak attack for ..." message.
+
+---
+
 <a id="objectreplacecrashguard"></a>
 
 ### A rare object-list crash turned into a log line (`ObjectReplaceCrashGuard`)
@@ -1964,22 +1985,6 @@ with exactly the recorded crash; with the guard it carried on, and the log count
 **Why the image can't change.** The same pipelines are created from the same inputs; only the threads that compile them change. Pipelines needed right now are compiled where they always were.
 
 **Measured (2026-10-23/24, driver shader cache emptied):** 6-core: the first teleport's longest frame 6-18 s instead of a freeze of over 30 s; 4-core: into the world, teleport and door done (longest frame 26 s) instead of never reaching the world. With everything cached no difference: at 4K with frame generation and a 60 fps cap in the Imperial City, main-thread and render-thread time and stutter were the same with and without it (four alternating runs). Untested on NVIDIA.
-
----
-
-<a id="bow-sneak-1x"></a>
-
-### Bow sneak attacks hit once, with the bow's multiplier (`BowSneakAttackFix`)
-
-[Evidence](research.md#bow-sneak-1x).
-
-**The problem.** A bug in the game's own code that changes damage. When your arrow lands, both of the game's engines check the hit. The new engine looks up your bow's sneak multiplier (2x, or 3x at higher Sneak) and sends the hit to the old engine, which deals the damage and shows "Sneak attack for 2X damage". But the old engine also runs its own arrow-impact code, and that code always uses 1x. Whichever engine notices the hit first wins: often it is the old one, so the shot says "Sneak attack for 1X damage" and does 1x. When both notice the same arrow, the target is hit twice (1x, then 2x a few milliseconds later). In one measured session of 23 sneak shots, 10 did 2x, 9 did 1x and 4 hit twice.
-
-*Analogy:* two cashiers ring up the same customer. One knows about today's discount, the other never does, and whoever gets there first sets the price; sometimes both charge.
-
-**What we did.** Both hits pass through two calls in the old engine's code, which the DLL sends through small wrappers (found by their code and checked). Each of your arrows now hits once: the second hit of the same arrow on the same target within half a second is not made. When the old engine's own impact is the first, it uses the multiplier the new engine worked out for your last arrow hit instead of 1x (with a bow that only changes with your Sneak skill). Until your first arrow hit in a session there is no such value yet, and that hit keeps the old engine's 1x, as in the stock game. Hits by other characters are unchanged.
-
-**What changes.** Damage, back to what the game intends: a sneak shot with a bow does your sneak multiplier, once. Checked in play: 20 sneak shots in a row each hit once and said "Sneak attack for 2X damage"; half of them would have done 1x in the stock game, and a quarter would have hit twice. `BowSneakAttackFix=0` brings back the stock game's behaviour (start-up, then live). Nothing you see changes apart from the damage and the "Sneak attack for ..." message.
 
 ---
 
@@ -2112,6 +2117,56 @@ much lower frame rate with the key on. There it is left to the game, as without 
 
 ---
 
+<a id="shaderscreenafterdriverchange"></a>
+
+### The shader screen comes back after a driver update (`ShaderScreenAfterDriverChange`, game bug)
+
+[Evidence](research.md#shaderscreenafterdriverchange).
+
+**The problem.** The very first time the game starts, it waits on a "Shaders preloading" screen while it builds its
+shaders. It decides that only once, by asking whether your settings file exists yet. A new graphics driver throws away
+the shaders the driver had already built, but your settings file is still there, so the screen never comes back. The
+game then builds everything in the background while you play, which stutters for the first few minutes. Players get
+the screen back by renaming `Save_Settings.sav`, which also resets every setting.
+
+**What we did.** The DLL notes your graphics card and driver version in `OblivionPerfFix-gpu.txt` next to itself. When
+they change, it answers "no settings file yet" to that one question only, so the game shows its own first-launch
+shader screen. Your settings load as usual. Behind the screen the shaders are built at the engine's fast pace (the game
+itself only asks for its slow background pace there); from the main menu on, `PsoPrecompileFast` works as usual. The
+new driver is noted once the shaders are done, so closing the game during the screen brings it back next time. The
+first start with the switch on only notes the card.
+
+**What changes.** After a driver or card change, start-up waits until the shaders are built, as the game does on its
+first launch, instead of building them while you play. That wait is the one thing you notice, so the switch is there
+to turn it off (0). After a driver update you wait a few minutes on the screen once, and then play has no shader
+building left in it (the contributor's measurements, with the driver's cache emptied: pull request #33). Start-up
+only.
+
+An earlier test with NVIDIA's shader cache switched off showed more small hitches with the screen than without. That
+was the test, not the game: Unreal drops a built shader from memory when it has not been used for about a minute and
+counts on the driver's cache to bring it back cheaply. With that cache switched off, everything the screen built had to
+be built again during play. After a real driver update the cache is empty but works, which is what this switch is for.
+
+<a id="vramcounterfix"></a>
+
+### The "Show VRAM" counter shows real numbers (`VramCounterFix`)
+
+[Evidence](research.md#vramcounterfix).
+
+**The problem.** A bug in the game. Turn on "Show VRAM" in the Graphics page and the corner of the screen says
+"VRAM: 0/0", on every PC (players report it on AMD and NVIDIA cards alike). The counter asks the engine for two numbers:
+how much video memory the game uses, and how much Windows lets it use (its budget). The engine keeps both in a small
+record on the graphics card's object, but in the game's release build nothing ever writes them, so both stay 0.
+
+**What we did.** The counter's question goes through two calls in the game's code, which the DLL sends through a small
+wrapper (found by their code and checked). The wrapper asks the game first. Only when both answers are 0 does it put in
+the same two numbers the engine was meant to supply, from Windows (DXGI), which the DLL already reads once a second for
+its memory line in the log. If a game update fixes the record, the game's own numbers are shown unchanged.
+
+**What changes.** The counter's two numbers, and only while you have it switched on: with the fix it shows the use
+and the budget in MB, switched off live it is back to "VRAM: 0/0" (checked by the contributor, pull request #33). On by default; installed when the game starts, then
+switches live.
+
 ## Memory safety and diagnostics
 
 <a id="memoryrelief"></a>
@@ -2133,6 +2188,35 @@ When the game reports a GPU crash, `GpuCrashReport` finds its graphics device on
 `LogFile=0` (under `[General]`, default 1, read at start-up) turns the log off for people who do not want the files: at start-up nothing is created, renamed or deleted, ordinary lines are dropped, and logs from earlier sessions stay where they are. The one exception is the GPU crash report: its first line creates `OblivionPerfFix.log` (the earlier logs rotate to `.1` / `.2` as usual) with a one-line note, so a GPU crash still leaves its report. The caps are unchanged: 8 MB per file, three files, 24 MB at most.
 
 **Why the image can't change.** Nothing you see. While RAM is short, the traversal-stutter gains of `LumenKeepArrayCapacity` and `UploadMemoryKeep` are given up. The crash report only reads and writes the log.
+
+---
+
+<a id="sharedmemorygpu"></a>
+
+### Graphics that use the PC's RAM (`SharedMemoryGpu`)
+
+Whose bug the reported freeze is (ours, or also the stock game's on such a device) is not known yet; this change makes
+our fixes keep less memory there either way.
+
+**The problem.** Integrated graphics and handhelds (ROG Ally, Legion Go, Steam Deck) have no video memory of their own:
+everything the graphics use is the PC's RAM. Several fixes keep memory on purpose (`UploadMemoryKeep`,
+`LumenKeepArrayCapacity`, `GpuSceneKeepCapacity`, `RtSceneBufferKeep`, `OsPageCache`), a few hundred MB, so the game
+does not have to ask Windows for it again. On a 16 GB handheld the game already uses nearly all of the RAM, and the
+"video memory budget" Windows reports there is the graphics' share of RAM, which does not show RAM running out. A
+player's ROG Ally froze completely.
+
+*Analogy:* a lodger keeping a spare room is fine in a big house; in a one-room flat the room he keeps is the kitchen.
+
+**What we did.** At start-up the DLL asks the game's own graphics device whether it uses system memory (Direct3D 12's
+"UMA" answer). If it does, the game runs on Windows itself (not under Proton, CrossOver or Wine, where Linux and macOS
+deal with low memory their own way) and the PC has less than 20 GB of RAM (16 GB handhelds; the 24 GB Ally X keeps
+every fix), those fixes behave
+as the game does, the automatic parallel translation stays off, and
+`CommandAllocatorTrim` gives spare command memory back after every load. The log says what it found and why. `SharedMemoryGpu=0`
+turns this off, `1` forces it on any PC.
+
+**Why the image can't change.** The fixes involved only keep or give back memory; with this they take the game's own
+paths, which draw the same picture.
 
 ---
 
@@ -2224,4 +2308,4 @@ then limited the frame rate in these views.
 
 **How we checked that nothing looks different:** frozen, 8-frame-averaged reference images with the fixes on and off, compared automatically. That covered 13 conditions: dawn, noon, dusk, night, clear, cloudy, fog, rain and thunderstorm. Every brightness difference was within about 2%, the same size as the gap between two runs with identical settings.
 
-**Travelling:** `LumenKeepArrayCapacity`, `UploadMemoryKeep` and `PhysicsTreeTimeSlicing` remove the two memory round-trips and the physics catch-up behind most hitches while travelling across the landscape, `NavmeshBuildNoBusyWait` the navigation-tile waits and `GpuSceneKeepCapacity` the GPU list re-creations; `NpcCreationPacing` spreads the burst when the game creates a group of NPCs at once as their area loads (for example Sheogorath's shrine, seen from the road to the Wayshrine of Stendarr). Still open: single steps of one character (a body or a robe, 17-27 ms each) and the first growth of the GPU's object lists to a new size. The long frame as the picture comes back after a door, a city gate or a fast travel is fixed by `PrepareCollisionBehindLoadingScreen`, and the frozen last image before it (the wait for the new area's textures) by `StreamBehindLoadingScreen`; the big stalls of a transition happen behind the loading screen, where you don't see them.
+**Travelling:** `LumenKeepArrayCapacity`, `UploadMemoryKeep` and `PhysicsTreeTimeSlicing` remove the two memory round-trips and the physics catch-up behind most hitches while travelling across the landscape, `NavmeshBuildNoBusyWait` the navigation-tile waits and `GpuSceneKeepCapacity` the GPU list re-creations; `NpcCreationPacing` spreads the burst when the game creates a group of NPCs at once as their area loads (for example Sheogorath's shrine, seen from the road to the Wayshrine of Stendarr). Still open: single steps of one character (a body or a robe, 17-27 ms each) and the first growth of the GPU's object lists to a new size. The long frame as the picture comes back after a door, a city gate or a fast travel is fixed by `PrepareCollisionBehindLoadingScreen`; the big stalls of a transition happen behind the loading screen, where you don't see them.
