@@ -14,7 +14,7 @@
 #define OPF_VERSION "1.2.4"
 // The release label after the version (the tag is v<OPF_VERSION><OPF_RELEASE_SUFFIX>): in the log's first line and the DLL's
 // version resource (build.ps1 reads both lines; CI checks the tag against OPF_VERSION).
-#define OPF_RELEASE_SUFFIX "-beta"
+#define OPF_RELEASE_SUFFIX "-beta+fork.28"
 
 namespace opf {
 
@@ -87,7 +87,8 @@ struct Config {
     bool trapCrashGuard = true;        // TrapCrashGuard: traps drop actors that no longer exist instead of crashing (game bug)
     bool bowSneakAttackFix = true;     // BowSneakAttackFix (game bug fix, on; user 2026-10-31): one hit per player arrow, the old engine's with the Unreal side's sneak
                                        // multiplier (game bug: bow sneak attacks at 1x or hit twice)
-    bool autosaveFollowsMenu = false;  // AutosaveFollowsMenu (game bug fix, OFF by default, user 2026-10-31: it removes the level-up
+    // Mishu's Edition: on by default (the original 1.2.4: off)
+    bool autosaveFollowsMenu = true;   // AutosaveFollowsMenu (game bug fix, OFF by default, user 2026-10-31: it removes the level-up
                                        // and quest autosaves while all four menu options are off): no level-up or scripted
                                        // autosave while every autosave option in the menu is off (game bug)
     bool havokPickWarningGuard = true; // HavokPickWarningGuard: the old engine's "Havok picks" warning box no longer stops the game (game bug)
@@ -110,7 +111,8 @@ struct Config {
     bool displayModeCache = true;      // DisplayModeCache: GetMonitorsInfo reads each monitor's mode list once (checked each time)
     bool monitorNativeFromWindows = true;   // MonitorNativeFromWindows (game bug, on by default): a monitor's native
                                             // resolution from Windows' preferred mode, not the EDID's first timing (start-up only)
-    bool fullscreenAllResolutions = false;  // FullscreenAllResolutions (OFF by default, user 2026-10-31: adds modes of other shapes and
+    // Mishu's Edition: on by default (the original 1.2.4: off)
+    bool fullscreenAllResolutions = true;   // FullscreenAllResolutions (OFF by default, user 2026-10-31: adds modes of other shapes and
                                             // above native; not needed for the reported bug): every mode of the monitor
                                             // in the fullscreen resolution list (start-up only)
     bool separableSkinAbove4K = true;   // SeparableSkinAbove4K (game bug fix, on; user 2026-10-31): r.SSS.Burley.Quality 0 while the
@@ -259,17 +261,23 @@ struct Config {
                                        // interior entry (0 = off; live; needs StreamBehindLoadingScreen)
     int unfreezeBehindLoadingFastTravel = 0;  // the same after a fast travel, in ms (0 = UnfreezeBehindLoadingScreen's
                                               // value; on only while UnfreezeBehindLoadingScreen is on; live)
-    bool hdrMenuRows = false;          // HdrMenuRows (off by default): an HDR section on the PC Graphics page (HDR,
+    // Mishu's Edition: on by default (the original 1.2.4: off)
+    bool hdrMenuRows = true;           // HdrMenuRows (off by default): an HDR section on the PC Graphics page (HDR,
                                        // peak, paper white, black floor, mid-tone; start-up only; needs NpcCreationPacing)
-    bool hudAspectRow = false;          // HudAspectRow (off by default): a "HUD Aspect Ratio" row (4:3 / 16:9 /
+    // Mishu's Edition: on by default (the original 1.2.4: off)
+    bool hudAspectRow = true;           // HudAspectRow (off by default): a "HUD Aspect Ratio" row (4:3 / 16:9 /
                                         // 21:9 / 32:9 / Wide) in the Graphics page's General section (start-up only)
-    bool dlssRayReconstruction = false;  // DlssRayReconstruction (off by default, trade-off): a "DLSS - Ray
+    // Mishu's Edition: on by default (the original 1.2.4: off)
+    bool dlssRayReconstruction = true;   // DlssRayReconstruction (off by default, trade-off): a "DLSS - Ray
                                          // Reconstruction" row in the Graphics page's Advanced section (start-up only)
-    bool hdrGamma22 = false;           // HdrGamma22 (TRADE-OFF, off by default: a look change, user 2026-10-31; HDR only): the HDR picture's darks as an SDR
+    // Mishu's Edition: on by default (the original 1.2.4: off)
+    bool hdrGamma22 = true;            // HdrGamma22 (TRADE-OFF, off by default: a look change, user 2026-10-31; HDR only): the HDR picture's darks as an SDR
                                        // monitor shows them (gamma 2.2), the curve refitted in memory (live; needs NpcCreationPacing)
-    bool hdrMenuBackground = false;    // HdrMenuBackground (TRADE-OFF, off by default): the player menu's background
+    // Mishu's Edition: on by default (the original 1.2.4: off)
+    bool hdrMenuBackground = true;     // HdrMenuBackground (TRADE-OFF, off by default): the player menu's background
                                        // in HDR10 shown at the world's nits, not its PQ values as colour (start-up install, live)
-    bool hdrSaveThumbnail = false;     // HdrSaveThumbnail (TRADE-OFF, off by default): a save's thumbnail made in
+    // Mishu's Edition: on by default (the original 1.2.4: off)
+    bool hdrSaveThumbnail = true;      // HdrSaveThumbnail (TRADE-OFF, off by default): a save's thumbnail made in
                                        // HDR10 converted the same way (start-up install, live)
     int hdrGamma22White = 95;         // not in the shipped ini: HdrGamma22's reference white = this / 10 x the Mid-Tone (live)
     bool hitchLedgerTickSplit = false; // HitchLedgerTickSplit (diagnostic, public since 1.2.3): diagnostics/tick_split.cpp, the
@@ -983,6 +991,16 @@ bool FindCellBufferPacedEvict();                          // locate and verify e
 bool InstallCellBufferPacedEvict(bool beforeGameCode);   // start-up only (before the TES constructor; last: chains detours)
 void SetCellBufferPacedEvict(int mode);                  // live: 0 crossing-frame teardown (as the game), 1 paced
 void LogCellBufferPacedEvictStats();
+uint8_t* CellBufferIniWriter();   // Mishu's Edition: the old engine's INISettingCollection::WriteSetting (found, maybe detoured)
+uint64_t* CellBufferTesSlot();    // Mishu's Edition: the slot holding the old engine's TES pointer
+// settings/old_engine_settings.cpp (Mishu's Edition OldEngineSettings): the old engine's ini settings listed in
+// OblivionPerfFix.ini's [OldEngine] section ("bGeneralSubtitles:GamePlay=1") set in memory once its world exists;
+// Oblivion.ini is still written with the player's values
+uint64_t* FindOldEngineSetting(const char* fullName);    // the {value, name*} pair of "name:Section" (nullptr if not exactly one)
+bool FindOldEngineSettings();
+bool InstallOldEngineSettings();                          // start-up, after CellBufferPacedEvict (chains its WriteSetting detour)
+void TickOldEngineSettings(const wchar_t* iniPath);       // monitor, every second
+bool OldEngineSettingsListed(const wchar_t* iniPath);     // the ini has an [OldEngine] section with lines
 // settings/hdr_menu.cpp (HdrMenuRows, off by default): an HDR section on the game's PC Graphics page
 // (a new settings table and category row, in memory; game thread): HDR, peak, paper white, black floor, mid-tone
 struct HdrMenuInfoOut {

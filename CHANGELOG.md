@@ -9,6 +9,18 @@ Downloads, checksums and build attestations: https://github.com/LTSharpe/Oblivio
 Bug fixes say whose bug it was: **game bug** = also happens without OblivionPerfFix (in the game, its engine or a
 driver library); **our bug** = caused by an earlier version of OblivionPerfFix.
 
+## 1.2.4-beta+fork.28
+Mishu's Edition, rebuilt on the original 1.2.4-beta, which now includes this fork's pull requests #33 to #36. What this
+edition adds on top:
+- **Defaults:** `HdrMenuRows`, `HudAspectRow`, `DlssRayReconstruction`, `HdrGamma22`, `HdrMenuBackground`,
+  `HdrSaveThumbnail`, `AutosaveFollowsMenu` and `FullscreenAllResolutions` are on (the original ships them off). Each
+  one's ini line says so; set it to 0 for the original's default.
+- **`OldEngineSettings`** (not in the original): the old engine's Oblivion.ini settings listed in the ini's `[OldEngine]`
+  section are set in memory, without editing the game's file (for example `bGeneralSubtitles:GamePlay=1` for NPC-to-NPC
+  chatter subtitles). Nothing is set unless listed.
+- Dropped from the fork, as the original has them or they were only for development: everything from fork.27 that is
+  now in the original, the `PixGpuCapturer` diagnostic and the `-Lab` build option.
+
 ## 1.2.4-beta
 For Oblivion Remastered, Steam build 19115871 (Game Pass experimental). Thanks to Mishu117 for pull requests #33, #34,
 #35 and #36, to mkusm for pull request #31, to solir2 for the ROG Ally report, and to everyone who reported results and

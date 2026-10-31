@@ -1288,6 +1288,32 @@ of the row change is other unloading and loading). `AnimTeardownParallel=1` is o
 What is left of the crossing frame is the incoming row (temporary data load ~3.5 ms, attaching the cells ~3.5 ms) and the
 old engine's ordinary frame work. `CellBufferPacedEvict=1` is on by default.
 
+<a id="oldenginesettings"></a>
+
+### Old-engine settings in memory (`OldEngineSettings`, Mishu's Edition only)
+
+[Explanation](how-it-works.md#oldenginesettings).
+
+- **Where the settings are** (build 19115871): each is a {value (8 bytes), name pointer} pair in .data; static ones
+  hold the shipped Oblivion.ini's values (uGridsToLoad:General at exe+0x8FAED80 = 5, bBackgroundCellLoads 1,
+  iPreloadSizeLimit 26214400; self-test), others are built by the exe's static initialisers
+  (iPostProcessMilliseconds:BackgroundLoad). The ini writer (INISettingCollection::WriteSetting, exe+0x66E0340) reads
+  the value at [setting] and the name at [setting+8] (npcs/cell_buffer.cpp), so a copy holding the file's value
+  keeps the file unchanged.
+- **Live check (2026-10-26, one benchmark game):** `bGeneralSubtitles:GamePlay=1`
+  applied 18 s after launch (file value 0); at quit the writer got the file's value; Oblivion.ini byte-identical
+  afterwards. Kept through 10 more quits in the A/B below.
+- **Not yet seen on screen:** that NPC-to-NPC chatter shows subtitles with it (UESP and mod pages say the ini line
+  does that in the remaster; not checked).
+- **iPostProcessMilliseconds:BackgroundLoad 5 vs 2** (blackwood, ABBA x5, display off): within noise; the old engine's
+  thread time unchanged (2.2 vs 2.1 ms).
+- **Refused: uGridsToLoad and uExterior Cell Buffer** (fork.13, 2026-10-27). Both are sized when the old engine makes
+  its world, so changing them later would mismatch the grid's arrays. A bigger grid set in time also failed:
+  uGridsToLoad 7, applied in CellBufferPacedEvict's clamp stub before the TES constructor's first read, crashed 15 of 15
+  launches with the same corrupted scene-graph child (exe+0x66E3F9A). Something in the remaster stays sized for 5 x 5.
+  Also measured for a "View Distance Max": uGridDistantCount 50 / uGridDistantTreeRange 30 and fLODFadeOutMult* x3
+  showed no visible change at a long vista, and no cost (, status.md).
+
 ## Doors, loading screens and start-up
 
 <a id="preparecollisionbehindloadingscreen"></a>

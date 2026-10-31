@@ -569,6 +569,7 @@ static uint64_t HashWords(uint64_t seed, const void* data, size_t bytes)
 #include "selftest_clothreg.h"    // ClothRegisterLite: sites, lite builds and their completion with fakes
 #include "selftest_clothdefer.h"     // ClothBuildDefer: sites, hooks and the defer rule (after ClothRegisterLite)
 #include "selftest_animpar.h"      // AnimTeardownParallel's shapes and the helper queue with fakes
+#include "selftest_oldini.h"       // OldEngineSettings (Mishu's Edition): setting pairs, the chained ini-writer detour
 #include "selftest_cellbuf.h"      // CellBufferPacedEvict's shapes, the clamp stub and the buffer LRU with and without the fix
 #include "selftest_vramcounter.h"  // VramCounterFix: the Show VRAM counter
 #include "selftest_shaderscreen.h"  // ShaderScreenAfterDriverChange
@@ -2582,6 +2583,8 @@ int wmain(int argc, wchar_t** argv)
     // CellBufferPacedEvict (lab prototype): spare cell buffer slots, overflow torn down one cell per OT frame (selftest_cellbuf.h); after
     // the ledger's test, which detours the same grid-change entry.
     cbuf::Run(game);
+    // OldEngineSettings (Mishu's Edition): after cbuf (chains to its ini-writer detour in this mapped copy).
+    oini::Run(game);
     // HdrMenuRows: the engine helpers it calls (selftest_hdrmenu.h).
     hdrm::Run(game);
     // HdrGamma22 (selftest_hdrgamma.h).

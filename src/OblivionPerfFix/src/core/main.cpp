@@ -222,6 +222,7 @@ DWORD WINAPI MonitorThread(LPVOID)
         PsoPrecompileWatchDriver();  // the cold-cache guard's driver-thread reading (no-op unless installed and precompiling)
         SetAnimTeardownParallel(ParallelHelpersAllowed(cfg) ? cfg.animTeardownParallel : 0);    // AnimTeardownParallel: no-op unless installed at start-up
         SetCellBufferPacedEvict(cfg.cellBufferPacedEvict);    // CellBufferPacedEvict: no-op unless installed at start-up
+        TickOldEngineSettings(g_iniPath.c_str());             // OldEngineSettings (Mishu's Edition): no-op unless installed at start-up
         HdrMenuMonitorTick();                                 // HdrMenuRows: reads Save_Settings.sav once (no-op unless installed)
         SetHdrGamma22(cfg.hdrGamma22, cfg.hdrGamma22White);   // HdrGamma22 (trade-off): live (no-op unless installed)
         HdrGammaMonitorTick();                                // ... fits a curve the game thread asked for
@@ -746,6 +747,10 @@ void Init(const char* loadedVia, bool proxyOk, bool beforeGameCode)
     if (cfg.cellBufferPacedEvict) {
         if (InstallCellBufferPacedEvict(beforeGameCode)) SetCellBufferPacedEvict(cfg.cellBufferPacedEvict);
     }
+    // OldEngineSettings (Mishu's Edition): the ini writer detoured (after CellBufferPacedEvict's detour of the same entry, which
+    // it chains to) only if [OldEngine] lists settings at start-up; values applied by the monitor once the world exists.
+    if (OldEngineSettingsListed(g_iniPath.c_str())) InstallOldEngineSettings();
+    else Log("[oldini] no [OldEngine] settings listed in OblivionPerfFix.ini (takes a restart to add the first)");
     // PhysicsDestroyBatch: three call sites in the step's DestroyPendingProxies path, only if != 0 at start-up (then
     // live); before the lab's PhysWaitProbe, whose entry detours would fail this code's entry check.
     if (cfg.physicsDestroyBatch) {
@@ -827,7 +832,7 @@ struct OBSEPluginVersionData {
 extern "C" {
 __declspec(dllexport) OBSEPluginVersionData OBSEPlugin_Version = {
     OBSEPluginVersionData::kVersion,
-    0x010204,  // plugin version 1.2.4
+    0x0102041C,  // plugin version 1.2.4-beta+fork.28 (Mishu's Edition: major.minor.patch.fork)
     "OblivionPerfFix",
     "OblivionPerfFix",
     // Addresses come from byte-pattern scans and we use no OBSE game structures,

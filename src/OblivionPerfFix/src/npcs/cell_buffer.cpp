@@ -471,6 +471,11 @@ void SetCellBufferPacedEvict(int mode)
                               : "outgoing cells torn down in the crossing frame (as the game does)");
 }
 
+// Mishu's Edition (2026-10-26), for OldEngineSettings (settings/old_engine_settings.cpp): the ini writer's entry (detoured
+// once this is installed) and the TES pointer's slot, from this file's search (no patching); nullptr if not found.
+uint8_t* CellBufferIniWriter() { return FindCellBufferPacedEvict() ? s.writeSetting : nullptr; }
+uint64_t* CellBufferTesSlot() { return FindCellBufferPacedEvict() ? s.tesSlot : nullptr; }
+
 void LogCellBufferPacedEvictStats()
 {
     if (!s.installed) return;

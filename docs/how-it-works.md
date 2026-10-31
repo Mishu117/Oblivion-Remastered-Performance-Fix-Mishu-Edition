@@ -1171,6 +1171,29 @@ fix stays out.
 What is left of the crossing frame is the incoming row (temporary data load ~3.5 ms, attaching the cells ~3.5 ms) and the
 old engine's ordinary frame work. `CellBufferPacedEvict=1` is on by default.
 
+---
+
+<a id="oldenginesettings"></a>
+
+### Old-engine settings without editing its file (`OldEngineSettings`, Mishu's Edition only, nothing set by default)
+
+[Evidence](research.md#oldenginesettings).
+
+**The problem.** The old engine still reads its own Oblivion.ini (in the game's `Content\Dev\ObvData` folder) with
+the 2006 settings: subtitles, background loading, cell buffers. Some of them are worth changing (the remaster's
+subtitle option does not reach `bGeneralSubtitles`, so NPC-to-NPC chatter has no subtitles), but that file belongs
+to the game, and the game writes it back every time it quits.
+
+**What we did.** Settings listed in OblivionPerfFix.ini's `[OldEngine]` section (`bGeneralSubtitles:GamePlay=1`, the
+setting's full name as the old engine knows it) are found in memory by that name and set once the old engine's world
+exists, that is after it has read its ini. When the game writes Oblivion.ini as it quits, the fix hands it the value
+it found, so the file stays as it was. Removing a line puts the found value back. Only numbers and switches
+(names starting with b, i, u, f); a name that does not exist is logged and ignored.
+
+**What changes.** Whatever the setting changes, and only where the game reads it after it is set; each use is a
+choice of yours, not a fix that leaves the game identical. While a setting is listed it wins over the game's own
+option for it (it is set again within a second).
+
 ## Doors, loading screens and start-up
 
 <a id="preparecollisionbehindloadingscreen"></a>
